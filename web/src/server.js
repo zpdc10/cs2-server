@@ -26,7 +26,7 @@ function clientIp(req) {
 const server = http.createServer((req, res) => {
   const started = Date.now();
   res.on('finish', () => {
-    if (req.url === '/healthz' || req.url.startsWith('/static/')) return;
+    if (req.url === '/healthz' || req.url.startsWith('/static/') || req.url.startsWith('/viewer/assets/')) return;
     const url = req.url.split('?')[0];
     console.log(`${new Date().toISOString()} ${clientIp(req)} ${req.method} ${url} ${res.statusCode} ${Date.now() - started}ms`);
   });

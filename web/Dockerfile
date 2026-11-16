@@ -3,6 +3,37 @@
 
 ARG NODE_IMAGE=node:22.23-alpine3.24
 
+# ---- 2D demo viewer ----------------------------------------------------------
+# sparkoo/csgo-2d-demo-viewer (MIT): Go demo parser compiled to WebAssembly + Preact player.
+# Pinned to a commit; bump VIEWER_REF to update (viewer/patch.mjs fails loudly if upstream changed shape).
+ARG GO_IMAGE=golang:1.27-alpine
+ARG VIEWER_REPO=https://github.com/sparkoo/csgo-2d-demo-viewer.git
+ARG VIEWER_REF=df5a8beacb06fe1c9c898d693ed5d00c65297747
+
+FROM ${GO_IMAGE} AS viewer-src
+ARG VIEWER_REPO
+ARG VIEWER_REF
+RUN apk add --no-cache git \
+ && git init -q /src && cd /src \
+ && git fetch -q --depth 1 "$VIEWER_REPO" "$VIEWER_REF" && git checkout -q FETCH_HEAD
+WORKDIR /src/parser
+RUN mkdir -p /out/wasm \
+ && GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o /out/wasm/csdemoparser.wasm ./wasm.go \
+ && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm/
+
+FROM ${NODE_IMAGE} AS viewer
+WORKDIR /src
+COPY --from=viewer-src /src/web ./
+COPY viewer /patch
+# --ignore-scripts: no install scripts from third-party packages. The icon font replaces Google Fonts (OFL-1.1).
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+ && npm install --ignore-scripts --no-audit --no-fund --save-exact @fontsource/material-icons@5.3.0 \
+ && node /patch/patch.mjs \
+ && VITE_DOWNLOAD_SERVER_URL=/viewer npx vite build --base /viewer/ \
+ && rm -f dist/logo192.png dist/logo512.png dist/manifest.json dist/robots.txt
+COPY --from=viewer-src /out/wasm ./dist/wasm
+COPY --from=viewer-src /src/LICENSE ./dist/LICENSE.txt
+
 # ---- build/test stage --------------------------------------------------------
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
@@ -25,6 +56,7 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/public ./public
+COPY --from=viewer /src/dist ./viewer-dist
 RUN mkdir -p /data/web /data/demos && chown node:node /data/web
 USER node
 EXPOSE 8080
