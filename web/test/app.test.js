@@ -258,5 +258,5 @@ test('HTTP: deathmatch buttons start deathmatch over RCON and report the result'
 
   ({ html, state } = await dmAction('deathmatch', { matchRunning: true }));
   assert.equal(state.on, false);
-  assert.match(html, /a match is running/);
+  assert.match(html, /did not start/);
 });

@@ -30,6 +30,15 @@ It uses the normal competitive game mode plus cvars, and MatchZy's built-in "sle
    `warmup_override.cfg`, which exec `cs2-stack/deathmatch_off.cfg`. That file resets exactly the deathmatch cvars that
    MatchZy's cfgs don't set, puts `matchzy_autostart_mode` back to 1 and calls `css_dm_exited`.
 
+4. The override cfgs (and `live_override.cfg`) also call `css_dm_exited warmup|practice|live`, so the plugin knows
+   which MatchZy mode runs. MatchZy never clears its internal sleep flag, which would make `.match` / `css_exitprac`
+   reset plain match warmup (and a loaded scrim) after the first deathmatch; the plugin blocks exactly those cases,
+   so `.match` behaves as before. `.dm` is also refused while a scrim config is loaded (until `.endmatch` or the
+   match ends) or a match is live.
+
+MatchZy's own `.sleep` / `css_sleep` now also starts deathmatch (sleep mode is only used for that here).
+State is in memory: after a server or plugin restart deathmatch is off (MatchZy starts in match mode).
+
 Files: `server/cfg/cs2-stack/deathmatch*.cfg`, `server/cfg/MatchZy/{sleep,warmup,prac}_override.cfg`.
 When adding a cvar to `deathmatch.cfg`, also reset it in `deathmatch_off.cfg` unless both MatchZy's `warmup.cfg` and
 `prac.cfg` set it (if only one does, reset it in the other one's `*_override.cfg`).

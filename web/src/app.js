@@ -82,13 +82,13 @@ export function extractJson(text) {
   try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
 }
 
-/** Parse `matchzy_listbackups` output into backup entries. */
 /** Parses the DeathmatchMode plugin's css_dm_status reply ("deathmatch=on variant=ffa"); null if the plugin did not answer. */
 export function parseDmStatus(text) {
   const m = /deathmatch=(on|off)\s+variant=(ffa|team)/.exec(String(text || ''));
   return m ? { on: m[1] === 'on', variant: m[2] } : null;
 }
 
+/** Parse `matchzy_listbackups` output into backup entries. */
 export function parseBackupList(text) {
   const items = [];
   const seen = new Set();
@@ -142,7 +142,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
         try {
           const g5 = extractJson(await rcon.one('get5_status', { timeoutMs: 3000 }));
           // Deathmatch runs in MatchZy's sleep mode, which get5_status reports as "none".
-          const dm = g5?.gamestate === 'none' ? parseDmStatus(await rcon.one('css_dm_status', { timeoutMs: 3000 }).catch(() => '')) : null;
+          const dm = g5?.gamestate === 'none' ? await dmStatus() : null;
           if (g5?.gamestate) value.mode = modeLabel(g5, dm);
         } catch { /* RCON optional for public status */ }
       }
@@ -150,6 +150,10 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       return value;
     })();
     return statusCache.pending;
+  }
+
+  async function dmStatus() {
+    return parseDmStatus(await rcon.one('css_dm_status', { timeoutMs: 3000 }).catch(() => ''));
   }
 
   function modeLabel(g5, dm = null) {
@@ -212,14 +216,14 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
         const o = await exec([`css_dm ${variant}`]);
         // The switch runs through MatchZy's cfgs; give the server a moment, then ask the plugin whether it is on.
         await new Promise((r) => setTimeout(r, dmCheckDelayMs));
-        const dm = parseDmStatus(await rcon.one('css_dm_status', { timeoutMs: 3000 }).catch(() => ''));
+        const dm = await dmStatus();
         statusCache.at = 0;
-        if (dm?.on) {
-          panelMode = 'deathmatch';
+        if (dm?.on && dm.variant === variant) {
+          panelMode = null;
           return out(title, o, true, 'Deathmatch is on. Switch to practice or exit to match mode to leave it.');
         }
         return out(title, o, false, dm
-          ? 'Deathmatch did not start: a match is running. Cancel it first.'
+          ? 'Deathmatch did not start (yet). If a match is running, cancel it first; otherwise refresh in a few seconds.'
           : 'The server did not answer css_dm_status. Is the DeathmatchMode plugin loaded?');
       }
       case 'practice': {
