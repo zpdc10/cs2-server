@@ -186,7 +186,7 @@ public partial class DeathmatchModePlugin : BasePlugin
 
         if (_variant == Variant.GunGame)
         {
-            Server.PrintToChatAll($"{Prefix} {ChatColors.Green}Gun game{ChatColors.Default}: every kill gives you the next gun ({GunGameLevels.Length} levels). Last level is the knife: a knife kill wins. Knife someone to send them back a level. {ChatColors.Green}.level{ChatColors.Default} shows yours.");
+            Server.PrintToChatAll($"{Prefix} {ChatColors.Green}Gun game{ChatColors.Default}: every kill gives you the next gun ({GunGameLevels.Length} levels, random order every game, starting with {Pretty(GunGameLevels[0])}). Last level is the knife: a knife kill wins. Knife someone to send them back a level. {ChatColors.Green}.level{ChatColors.Default} shows yours.");
         }
         else
         {

@@ -13,13 +13,23 @@ namespace DeathmatchMode;
 /// </summary>
 public partial class DeathmatchModePlugin
 {
-    // Level 1 .. N. The last entry must stay the knife.
-    internal static readonly string[] GunGameLevels =
+    // The guns of gun game. Every new game (start, after a win) uses them in a new random order; the knife is always last.
+    internal static readonly string[] GunGamePool =
     {
         "weapon_ak47", "weapon_m4a1_silencer", "weapon_m4a1", "weapon_galilar", "weapon_famas", "weapon_aug",
         "weapon_sg556", "weapon_awp", "weapon_ssg08", "weapon_p90", "weapon_mp9", "weapon_ump45", "weapon_mac10",
-        "weapon_xm1014", "weapon_nova", "weapon_deagle", "weapon_p250", "weapon_glock", "weapon_knife",
+        "weapon_xm1014", "weapon_nova", "weapon_deagle", "weapon_p250", "weapon_glock",
     };
+
+    // Level 1 .. N for the current game; last entry is the knife.
+    private string[] GunGameLevels = NewLadder();
+
+    private static string[] NewLadder()
+    {
+        var guns = (string[])GunGamePool.Clone();
+        Random.Shared.Shuffle(guns);
+        return guns.Append("weapon_knife").ToArray();
+    }
 
     private const float GunGameRestartDelay = 6.0f;
 
@@ -39,6 +49,7 @@ public partial class DeathmatchModePlugin
         _ggLevel.Clear();
         _ggRoundOver = false;
         _ggGame++;
+        GunGameLevels = NewLadder();
     }
 
     private void ShowLevel(CCSPlayerController player)
@@ -114,7 +125,14 @@ public partial class DeathmatchModePlugin
                 if (!_active || _variant != Variant.GunGame || _ggGame != game) return;
                 Server.ExecuteCommand("mp_restartgame 1");
                 // Kills keep not counting until the restart (1 s) has actually happened.
-                AddTimer(1.2f, () => { if (_ggGame == game) GunGameReset(); });
+                AddTimer(1.2f, () =>
+                {
+                    if (_ggGame != game) return;
+                    GunGameReset();
+                    // The restart has respawned everyone with their old guns: hand out level 1 of the new order.
+                    foreach (var p in Utilities.GetPlayers()) if (p.IsValid && p.PawnIsAlive) GiveLevelWeapon(p);
+                    Server.PrintToChatAll($"{Prefix} New game, new gun order. Starting with {Pretty(GunGameLevels[0])}.");
+                });
             });
             return HookResult.Continue;
         }
