@@ -21,7 +21,7 @@ It cannot start while a match is running (knife round or live): cancel the match
 
 It uses the normal competitive game mode plus cvars, and MatchZy's built-in "sleep" mode (MatchZy idle):
 
-1. `.dm` runs `css_match; css_sleep`. `css_match` ends practice mode the MatchZy way (bots, spawn markers, cheats) and
+1. `.dm` runs `css_match; css_sleep` (just `css_sleep` when deathmatch is already on). `css_match` ends practice mode the MatchZy way (bots, spawn markers, cheats) and
    does nothing in match warmup; MatchZy refuses `css_sleep` while a match is running.
 2. MatchZy execs its `sleep.cfg` (a full competitive baseline) and then our `MatchZy/sleep_override.cfg`, which execs
    `cs2-stack/deathmatch.cfg`: deathmatch cvars, `matchzy_autostart_mode 0` (so a map change re-enters sleep, i.e.

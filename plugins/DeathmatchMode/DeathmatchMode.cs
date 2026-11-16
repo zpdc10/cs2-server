@@ -89,8 +89,9 @@ public class DeathmatchModePlugin : BasePlugin
 
         int before = _entered;
         // css_match first: it ends practice mode the MatchZy way (bots, spawn markers, cheats), and does nothing in
-        // match warmup. css_sleep is refused by MatchZy while a match is running.
-        Server.ExecuteCommand("css_match; css_sleep");
+        // match warmup. css_sleep is refused by MatchZy while a match is running. Already in deathmatch (switching
+        // ffa <-> team): css_sleep alone re-runs the deathmatch cfg without a detour through match warmup.
+        Server.ExecuteCommand(_active ? "css_sleep" : "css_match; css_sleep");
         Reply($"Starting {VariantName()} deathmatch...");
 
         AddTimer(2.0f, () =>
