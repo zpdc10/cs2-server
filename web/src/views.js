@@ -35,7 +35,7 @@ export function layout({ title, user, active = '', body, csrf }) {
     ['/admin', 'Control', 'admin'],
   ].map(([href, label, key]) => `<a href="${href}" class="${active === key ? 'active' : ''}">${label}</a>`).join('');
   const userBox = user
-    ? `<form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="${esc(csrf)}"><span class="who">${esc(user.name || user.sid)}</span><button class="link" type="submit">Log out</button></form>`
+    ? `<form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="${esc(csrf)}"><span class="who" title="${esc(user.name || user.sid)}">${esc(user.name || user.sid)}</span><button class="link" type="submit">Log out</button></form>`
     : '<a class="btn small steam" href="/login">Sign in through Steam</a>';
   return `<!doctype html>
 <html lang="en">
@@ -77,7 +77,7 @@ export function statusCard(status, connect) {
     <div><span class="label">Mode</span><span class="value" data-k="mode">${esc(status?.mode || '—')}</span></div>
   </div>
   <div class="connect">
-    <a class="btn primary" href="steam://connect/${esc(connect.address)}${connect.password ? `/${esc(connect.password)}` : ''}">Connect</a>
+    <a class="btn primary block-sm" href="steam://connect/${esc(connect.address)}${connect.password ? `/${esc(connect.password)}` : ''}">Connect</a>
     <code class="copy" title="Click to copy">connect ${esc(connect.address)}${connect.password ? `; password ${esc(connect.password)}` : ''}</code>
     ${connect.passwordProtected && !connect.password ? '<span class="muted small">Password protected: ask an admin.</span>' : ''}
   </div>
@@ -97,14 +97,14 @@ export function resultClass(a, b) {
 export function demosTable(rows, { compact = false, viewer = false } = {}) {
   if (!rows.length) return '<p class="muted">No demos yet. Demos are recorded automatically when a match goes live.</p>';
   const trs = rows.map((r) => `<tr>
-    <td class="nowrap">${esc((r.date || '').replace('T', ' ').slice(0, 16))}</td>
-    <td>${esc(prettyMap(r.map))}</td>
+    <td class="nowrap date">${esc((r.date || '').replace('T', ' ').slice(0, 16))}</td>
+    <td class="map">${esc(prettyMap(r.map))}</td>
     <td class="teams"><span class="${resultClass(r.score1, r.score2) === 'win1' ? 'w' : ''}">${esc(r.team1 || '?')}</span> <span class="muted">vs</span> <span class="${resultClass(r.score1, r.score2) === 'win2' ? 'w' : ''}">${esc(r.team2 || '?')}</span></td>
     <td class="score nowrap">${esc(scoreText(r.score1, r.score2))}${r.status === 'live' ? ' <span class="tag live">live</span>' : ''}</td>
-    ${compact ? '' : `<td class="nowrap muted">${esc(fmtBytes(r.size))}</td>`}
-    <td class="nowrap">${viewer && r.status !== 'live' && VIEWER_EXT_RE.test(r.path) ? `<a class="btn small" href="${esc(viewerHref(r.path))}" title="Watch a 2D replay in the browser">Watch 2D</a> ` : ''}<a class="btn small" href="${esc(demoHref(r.path))}" download>Download</a></td>
+    ${compact ? '' : `<td class="nowrap muted size">${esc(fmtBytes(r.size))}</td>`}
+    <td class="nowrap act">${viewer && r.status !== 'live' && VIEWER_EXT_RE.test(r.path) ? `<a class="btn small" href="${esc(viewerHref(r.path))}" title="Watch a 2D replay in the browser">Watch 2D</a> ` : ''}<a class="btn small" href="${esc(demoHref(r.path))}" download>Download</a></td>
   </tr>`).join('');
-  return `<div class="table-wrap"><table class="demos">
+  return `<div class="table-wrap"><table class="demos cards">
   <thead><tr><th>Date</th><th>Map</th><th>Teams</th><th>Score</th>${compact ? '' : '<th>Size</th>'}<th></th></tr></thead>
   <tbody>${trs}</tbody></table></div>`;
 }
@@ -139,9 +139,9 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
 
   const backupRows = backups
     ? (backups.items.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Match</th><th>Map #</th><th>Round</th><th>Info</th><th></th></tr></thead><tbody>${backups.items.map((b) => `<tr>
-          <td>${esc(b.matchid)}</td><td>${esc(b.mapNumber + 1)}</td><td>${esc(b.round)}</td><td class="muted small">${esc(b.info)}</td>
-          <td><form method="post" action="/admin/action" class="inline" data-confirm="Restore round ${esc(b.round)}? The current round state is lost.">${hidden}<input type="hidden" name="action" value="restore"><input type="hidden" name="file" value="${esc(b.file)}"><button class="btn small warn" type="submit">Restore</button></form></td>
+      ? `<div class="table-wrap"><table class="backups cards"><thead><tr><th>Match</th><th>Map #</th><th>Round</th><th>Info</th><th></th></tr></thead><tbody>${backups.items.map((b) => `<tr>
+          <td data-label="Match">${esc(b.matchid)}</td><td data-label="Map #">${esc(b.mapNumber + 1)}</td><td data-label="Round">${esc(b.round)}</td><td class="muted small info">${esc(b.info)}</td>
+          <td class="act"><form method="post" action="/admin/action" class="inline" data-confirm="Restore round ${esc(b.round)}? The current round state is lost.">${hidden}<input type="hidden" name="action" value="restore"><input type="hidden" name="file" value="${esc(b.file)}"><button class="btn small warn" type="submit">Restore</button></form></td>
         </tr>`).join('')}</tbody></table></div>`
       : `<p class="muted">No backups found${backups.raw ? '' : ''}.</p>${backups.raw ? `<details><summary>Server reply</summary><pre>${esc(backups.raw)}</pre></details>` : ''}`)
     : '';
@@ -164,7 +164,7 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
 <section class="card">
   <h2>Practice</h2>
   <p class="muted small">MatchZy practice mode: .bot, .spawn, .rethrow, .timer ... Ends nothing by itself: cancel a running match first.</p>
-  <div class="actions">${act('practice', 'Switch to practice', 'primary')} ${act('exitprac', 'Exit practice')}</div>
+  <div class="actions">${act('practice', 'Switch to practice', 'primary')}${act('exitprac', 'Exit practice')}</div>
 </section>
 
 <section class="card">
@@ -220,7 +220,7 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
     <p class="muted small">With SteamIDs for both teams the match is locked (others are kicked, coaches type <code>.coach t</code>/<code>.coach ct</code>), and Bo1/Bo3 vetoes are available.
       Without any SteamIDs a quick scrim is set up instead (team names, map, playout; players pick sides and <code>.ready</code>).
       Map pool: ${esc(mapPool.map(prettyMap).join(', '))}.</p>
-    <button class="btn primary" type="submit">Start scrim</button>
+    <button class="btn primary block-sm" type="submit">Start scrim</button>
   </form>
 </section>
 

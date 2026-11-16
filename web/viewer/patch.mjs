@@ -101,6 +101,47 @@ self.onmessage = ({ data: msg }) => {
   ['\nloadWasm();', '\n// The parser is loaded on first use (a visitor\'s own file); server replays never need it.\nself.postMessage("ready");'],
 ]);
 
+// Touch screens: one finger pans the zoomed map, two fingers pinch-zoom it (upstream handles only the mouse).
+patch('src/Player/map/Map2d.jsx', [
+  ['  resetZoom() {',
+    `  touchDistance(touches) {
+    return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  }
+
+  handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      this.pinch = { distance: this.touchDistance(e.touches), zoom: this.state.zoom };
+    } else if (e.touches.length === 1) {
+      this.pinch = null;
+      this.lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  };
+
+  handleTouchMove = (e) => {
+    if (e.touches.length === 2 && this.pinch) {
+      const zoom = Math.min(Math.max(this.pinch.zoom * (this.touchDistance(e.touches) / this.pinch.distance), 1), 2.5);
+      this.setState(zoom === 1 ? { zoom, panX: 0, panY: 0 } : { zoom });
+    } else if (e.touches.length === 1 && this.lastTouch && this.state.zoom > 1) {
+      const t = e.touches[0];
+      // translate() is applied inside scale(), so divide by the zoom to keep the map under the finger.
+      this.setState({
+        panX: this.state.panX + (t.clientX - this.lastTouch.x) / this.state.zoom,
+        panY: this.state.panY + (t.clientY - this.lastTouch.y) / this.state.zoom,
+      });
+      this.lastTouch = { x: t.clientX, y: t.clientY };
+    }
+  };
+
+  handleTouchEnd = (e) => {
+    if (e.touches.length < 2) this.pinch = null;
+    this.lastTouch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  };
+
+  resetZoom() {`],
+  ['          onWheel={this.handleWheel}\n',
+    '          onWheel={this.handleWheel}\n          onTouchStart={this.handleTouchStart}\n          onTouchMove={this.handleTouchMove}\n          onTouchEnd={this.handleTouchEnd}\n          onTouchCancel={this.handleTouchEnd}\n'],
+]);
+
 fs.copyFileSync(new URL('./UploadPage.jsx', import.meta.url), 'src/UploadPage.jsx');
 
 // Self-hosted icon font and W3.CSS stand-ins instead of fonts.googleapis.com and w3schools.com.

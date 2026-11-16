@@ -45,3 +45,71 @@
 .cs2panel-upload { max-width: 900px; margin: 0 auto; padding: 24px 16px; font-family: system-ui, sans-serif; color: #333; }
 .cs2panel-upload h1 { font-size: 24px; margin: 8px 0; }
 .cs2panel-note { color: #666; margin: 0 0 20px; }
+
+/* ---- Phones and tablets -------------------------------------------------------------------
+   Upstream lays the player out for a desktop window (map 60% | panel 40%, both 100vh).
+   Selectors start with "html body" so they win over the player's own CSS whatever the load order. */
+html body .grid-container { height: 100vh; height: 100dvh; }
+html body .loading-dialog { max-width: calc(100vw - 32px); }
+
+/* Portrait (or any narrow window): map on top as a square, the panel scrolls below it. */
+@media (max-width: 900px) and (orientation: portrait), (max-width: 600px) {
+  html body .grid-container { grid-template-columns: 100%; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+  html body .grid-container > div { height: auto; min-height: 0; }
+  html body .grid-container > .map { height: min(100vw, 58vh); height: min(100vw, 58dvh); }
+  html body .grid-container > .infoPanel { border-left: 0; border-top: 1px solid rgba(58, 61, 66, 0.5); overflow: hidden; }
+}
+
+/* Landscape phones: the map is a square as tall as the screen, the panel fills the rest. */
+@media (orientation: landscape) and (max-height: 600px) {
+  html body .grid-container { grid-template-columns: min(100vh, 62vw) minmax(0, 1fr); grid-template-columns: min(100dvh, 62vw) minmax(0, 1fr); }
+}
+
+@media (max-width: 900px), (max-height: 600px) {
+  html body .info-panel-container { padding: 8px 10px; font-size: 15px; }
+  html body .timer-container { margin-bottom: 8px; }
+  html body .timer-container .w3-container { min-height: 40px; padding: 8px 12px; }
+  html body .timer-text { font-size: 1.2rem; }
+  html body .round-nav-container { margin: 6px 0; padding: 6px; min-height: 0; }
+  /* Rounds as an even grid (upstream uses 7% wide floats that collapse in a narrow panel). */
+  html body .round-nav-container .w3-bar { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; }
+  html body .round-nav-container .w3-bar > br { display: none; }
+  html body .roundNav { width: auto; margin: 0; padding: 3px 0; min-height: 34px; min-width: 0; overflow: hidden; }
+  html body .round-number { font-size: 12px; }
+  html body .round-icon { font-size: 10px; }
+  html body .controls-container { margin: 6px 0; padding: 4px 0; }
+  html body .control-button { width: 48px; height: 48px; }
+  html body .control-button.play-button { width: 56px; height: 56px; }
+  html body .scoreboard-container { margin: 6px 0; padding: 4px 0; }
+  html body .scoreboard-scores { margin-bottom: 4px; }
+  html body .score-number { font-size: 2rem; }
+  html body .team-name { font-size: 0.95rem; overflow-wrap: anywhere; padding: 0 4px; }
+  html body .divider { margin: 8px 0; }
+  html body .map-button { width: 48px; height: 48px; bottom: 10px; font-size: 24px; }
+  html body .zoom-reset { right: 10px; }
+  html body .layer-toggle { right: 66px; }
+  html body .layer-icon, html body .zoom-icon { font-size: 24px; }
+  html body .killfeed { font-size: 10px; top: 4px; right: 4px; }
+  html body .killfeedIcon { width: 28px; margin: 0 4px; }
+}
+
+/* Narrow panel: keep T and CT side by side but give the player cards a little more room. */
+@media (max-width: 420px) {
+  html body .team-list { padding: 0 2px; }
+  html body .playerListItemName { padding: 0 3%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html body .playerListItemContainer .w3-small { font-size: 10px !important; }
+  html body .playerListMoney { padding-right: 4px; }
+}
+
+/* Touch: pinch to zoom and drag to pan the map (see patch.mjs); the keyboard hints mean nothing there. */
+html body .map-container { touch-action: none; }
+@media (hover: none) {
+  html body .layer-hint, html body .zoom-hint { display: none; }
+}
+
+/* /viewer/ landing page on phones */
+@media (max-width: 600px) {
+  .cs2panel-upload { padding: 16px 12px; }
+  .cs2panel-upload h1 { font-size: 20px; }
+  .cs2panel-upload input { font-size: 16px; }
+}
