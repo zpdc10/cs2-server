@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# CS2 dedicated server + Metamod:Source + CounterStrikeSharp + MatchZy + SteamGroupAdmins.
+# CS2 dedicated server + Metamod:Source + CounterStrikeSharp + MatchZy + SteamGroupAdmins + DeathmatchMode.
 #
 # Build context is the REPO ROOT (docker-compose.yml: build.context ".", dockerfile "server/Dockerfile"),
 # because the SteamGroupAdmins plugin source lives in plugins/.
@@ -25,6 +25,11 @@ COPY plugins/SteamGroupAdmins/ plugins/SteamGroupAdmins/
 RUN dotnet publish plugins/SteamGroupAdmins -c Release -o /out/SteamGroupAdmins \
  && rm -f /out/SteamGroupAdmins/CounterStrikeSharp.API.dll /out/SteamGroupAdmins/*.pdb \
  && test -f /out/SteamGroupAdmins/SteamGroupAdmins.dll
+# DeathmatchMode plugin (.dm / css_dm): live-switchable deathmatch on top of MatchZy's sleep mode
+COPY plugins/DeathmatchMode/ plugins/DeathmatchMode/
+RUN dotnet publish plugins/DeathmatchMode -c Release -o /out/DeathmatchMode \
+ && rm -f /out/DeathmatchMode/CounterStrikeSharp.API.dll /out/DeathmatchMode/*.pdb \
+ && test -f /out/DeathmatchMode/DeathmatchMode.dll
 
 # ---------------------------------------------------------------------------------------------------
 # Stage 2: fetch + verify pinned release archives and unpack them into a ready-to-copy tree
@@ -70,6 +75,7 @@ FROM ${CS2_BASE_IMAGE}
 USER root
 COPY --from=fetch        /dist                     /opt/cs2-stack/dist
 COPY --from=plugin-build /out/SteamGroupAdmins     /opt/cs2-stack/dist/SteamGroupAdmins
+COPY --from=plugin-build /out/DeathmatchMode       /opt/cs2-stack/dist/DeathmatchMode
 COPY server/cfg/                                   /opt/cs2-stack/cfg/
 COPY server/scripts/                               /opt/cs2-stack/scripts/
 # Our server.cfg template replaces the image's /etc/server.cfg (same {{PLACEHOLDERS}}, entry.sh renders it).
