@@ -72,6 +72,12 @@ if [[ -f "${DIST}/DeathmatchMode/DeathmatchMode.dll" ]]; then
 else
     log "WARNING: DeathmatchMode.dll missing from the image; .dm will not work"
 fi
+# PracticeExtras (.noclip chat command) - refreshed every start
+if [[ -f "${DIST}/PracticeExtras/PracticeExtras.dll" ]]; then
+    mkdir -p "${CSS_DIR}/plugins/PracticeExtras"
+    cp -rf "${DIST}/PracticeExtras/." "${CSS_DIR}/plugins/PracticeExtras/"
+    log "PracticeExtras installed"
+fi
 [[ -n "${STEAM_GROUP_ID:-}" ]] || log "WARNING: STEAM_GROUP_ID is empty; nobody will get admin from the Steam group"
 
 # ---------------------------------------------------------------------------------------------------
