@@ -94,7 +94,8 @@ public class SteamGroupAdminsPlugin : BasePlugin, IPluginConfig<SteamGroupAdmins
         // bookkeeping so we never later remove a flag that now comes from admins.json, then re-grant.
         AddCommandListener("css_admins_reload", OnAdminsReloaded, HookMode.Post);
 
-        ApplyToConnectedPlayers();
+        // On a cold start no map is loaded yet (no players, no engine globals); only a hot reload has players.
+        if (hotReload) ApplyToConnectedPlayers();
 
         _refreshTimer = AddTimer(Config.RefreshIntervalSeconds, () => StartRefresh("timer"), TimerFlags.REPEAT);
         StartRefresh("load");
@@ -242,10 +243,22 @@ public class SteamGroupAdminsPlugin : BasePlugin, IPluginConfig<SteamGroupAdmins
     private bool IsDesiredAdmin(ulong steamId64) =>
         _extraAdmins.Contains(steamId64) || (_members?.Contains(steamId64) ?? false);
 
-    private static IEnumerable<ulong> ConnectedHumans() =>
-        Utilities.GetPlayers()
-            .Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false } && p.AuthorizedSteamID != null)
-            .Select(p => p.AuthorizedSteamID!.SteamId64);
+    private static List<ulong> ConnectedHumans()
+    {
+        try
+        {
+            return Utilities.GetPlayers()
+                .Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false } && p.AuthorizedSteamID != null)
+                .Select(p => p.AuthorizedSteamID!.SteamId64)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            // On a cold server start the plugin loads before the engine's global variables exist, and
+            // Server.MaxPlayers throws "Global Variables not initialized yet". Nobody can be connected yet.
+            return new List<ulong>();
+        }
+    }
 
     /// <summary>Grant to connected members, and revoke our flags from everyone (connected or not) who is no longer a member.</summary>
     private void ApplyToConnectedPlayers()
