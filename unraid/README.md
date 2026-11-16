@@ -10,25 +10,25 @@ Open a terminal on the Unraid server (or the web terminal):
 
 ```sh
 # Code: clone the repo somewhere persistent (not into the docker.img)
-mkdir -p /mnt/user/appdata/cs2
-cd /mnt/user/appdata/cs2
+mkdir -p /mnt/user/appdata/cs2-stack
+cd /mnt/user/appdata/cs2-stack
 git clone https://github.com/<you>/<repo>.git src
 
 # Data folders. The cs2 container runs as uid/gid 1000, so it must own its folders.
-mkdir -p /mnt/user/appdata/cs2/cs2-data /mnt/user/appdata/cs2/demos /mnt/user/appdata/cs2/web
-chown -R 1000:1000 /mnt/user/appdata/cs2/cs2-data /mnt/user/appdata/cs2/demos /mnt/user/appdata/cs2/web
+mkdir -p /mnt/user/appdata/cs2-stack/cs2-data /mnt/user/appdata/cs2-stack/demos /mnt/user/appdata/cs2-stack/web
+chown -R 1000:1000 /mnt/user/appdata/cs2-stack/cs2-data /mnt/user/appdata/cs2-stack/demos /mnt/user/appdata/cs2-stack/web
 ```
 
 * Needs about **60 GB** free for `cs2-data`, plus room for demos (~50-150 MB per map). If `appdata` is on a small cache
   pool, set `APPDATA` to a share with enough space, or set the appdata share to use the array.
 * Unraid's "New Permissions" / Docker Safe New Perms tool resets ownership to `nobody:users`; run the `chown` again
   afterwards (the cs2 container stops with a clear error if it cannot write).
-* The web container also runs as uid 1000: `chown -R 1000:1000 /mnt/user/appdata/cs2/web` too.
+* The web container also runs as uid 1000: `chown -R 1000:1000 /mnt/user/appdata/cs2-stack/web` too.
 
 ## 2. Configure
 
 ```sh
-cd /mnt/user/appdata/cs2/src
+cd /mnt/user/appdata/cs2-stack/src
 cp .env.example .env
 nano .env          # fill SRCDS_TOKEN, RCON_PASSWORD, SESSION_SECRET, MATCHZY_EVENTS_TOKEN, STEAM_GROUP_ID, TUNNEL_TOKEN
 ```
@@ -39,13 +39,13 @@ Never commit `.env`.
 ## 3. Add the stack in Compose Manager
 
 1. Docker tab -> Compose -> **Add New Stack**, name it `cs2`.
-2. Advanced -> set the stack's directory to `/mnt/user/appdata/cs2/src` (the repo checkout), so it uses the repo's
+2. Advanced -> set the stack's directory to `/mnt/user/appdata/cs2-stack/src` (the repo checkout), so it uses the repo's
    `docker-compose.yml` and `.env`. (Alternatively paste the compose file and `.env` contents into the stack editor;
    then the `build:` paths must point at the repo checkout with absolute paths.)
 3. **Compose Up**. The first time it builds the `cs2` and `web` images, then the cs2 container downloads CS2
    (~60 GB, can take an hour). Follow it with the stack's log button or `docker logs -f cs2`.
 
-CLI equivalent: `cd /mnt/user/appdata/cs2/src && docker compose up -d --build`.
+CLI equivalent: `cd /mnt/user/appdata/cs2-stack/src && docker compose up -d --build`.
 
 ## 4. Network
 
