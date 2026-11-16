@@ -7,7 +7,7 @@ ARG NODE_IMAGE=node:22.23-alpine3.24
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts && mkdir -p node_modules
 COPY scripts ./scripts
 COPY src ./src
 COPY public ./public

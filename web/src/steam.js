@@ -2,6 +2,13 @@
 
 const MAX_PAGES = 50;
 
+/** STEAM_GROUP_ID may be the 64-bit id (digits) or the custom URL name (steamcommunity.com/groups/<name>). */
+export function groupBaseUrl(groupId) {
+  const id = String(groupId).trim();
+  if (/^\d+$/.test(id)) return `https://steamcommunity.com/gid/${id}`;
+  return `https://steamcommunity.com/groups/${encodeURIComponent(id)}`;
+}
+
 export function parseMembersPage(xml) {
   const ids = [];
   const membersBlock = /<members>([\s\S]*?)<\/members>/i.exec(xml);
@@ -28,7 +35,7 @@ export class SteamGroup {
   async fetchAll() {
     const ids = new Set();
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const url = `https://steamcommunity.com/gid/${encodeURIComponent(this.groupId)}/memberslistxml/?xml=1&p=${page}`;
+      const url = `${groupBaseUrl(this.groupId)}/memberslistxml/?xml=1&p=${page}`;
       const res = await this.fetch(url, { signal: AbortSignal.timeout(10000), headers: { Accept: 'text/xml' } });
       if (!res.ok) throw new Error(`Steam group XML HTTP ${res.status}`);
       const parsed = parseMembersPage(await res.text());
