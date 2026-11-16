@@ -55,14 +55,24 @@ test('sanitizeArg strips quotes, semicolons and control chars', () => {
 });
 
 /** Fake Source RCON server: splits long output across packets, mirrors terminator packets. */
-function fakeServer({ password = 'pw', mirror = true, output = (cmd) => `ran ${cmd}` } = {}) {
+function fakeServer({ password = 'pw', mirror = true, cs2 = false, output = (cmd) => `ran ${cmd}` } = {}) {
   const srv = net.createServer((sock) => {
     const d = new PacketDecoder();
+    let pending = null;
     sock.on('data', (chunk) => {
       for (const p of d.push(chunk)) {
         if (p.type === SERVERDATA_AUTH) {
           sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, ''));
           sock.write(encodePacket(p.body === password ? p.id : -1, SERVERDATA_AUTH_RESPONSE, ''));
+        } else if (cs2 && p.type === SERVERDATA_EXECCOMMAND) {
+          pending = output(p.body);
+        } else if (cs2 && p.type === SERVERDATA_RESPONSE_VALUE) {
+          // CS2 behaviour seen live: output carries the terminator's id, then an empty packet with it.
+          setTimeout(() => {
+            sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, pending ?? ''));
+            sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, ''));
+            pending = null;
+          }, 20);
         } else if (p.type === SERVERDATA_EXECCOMMAND) {
           const out = output(p.body);
           // send in 4000-char packets, and write them byte-chunked to stress the decoder
@@ -89,6 +99,14 @@ test('rconExec: auth + multi-packet response with terminator', async () => {
   try {
     const res = await rconExec(['status', 'big', 'echo'], { host: '127.0.0.1', port: srv.address().port, password: 'pw' });
     assert.deepEqual(res, ['ran status', big, 'ran echo']);
+  } finally { srv.close(); }
+});
+
+test('rconExec: CS2 tags output with the terminator id', async () => {
+  const srv = await fakeServer({ cs2: true, output: (c) => (c === 'sv_cheats' ? 'sv_cheats = false' : `ran ${c}`) });
+  try {
+    const res = await rconExec(['sv_cheats', 'status'], { host: '127.0.0.1', port: srv.address().port, password: 'pw' });
+    assert.deepEqual(res, ['sv_cheats = false', 'ran status']);
   } finally { srv.close(); }
 });
 

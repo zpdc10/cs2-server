@@ -156,6 +156,13 @@ export async function rconExec(commands, {
         if (remaining <= 0) break;
         const p = await next(Math.min(gotData ? idleMs : firstDataMs, remaining));
         if (!p) break; // idle or overall timeout
+        if (p.id === termId && p.type === SERVERDATA_RESPONSE_VALUE && p.body !== '' && !/^\x00\x01(\x00\x00)?$/.test(p.body)) {
+          // CS2 tags the command's output with the id of the empty packet sent after it,
+          // then follows with an empty packet carrying that same id. Keep the output.
+          out += p.body;
+          gotData = true;
+          continue;
+        }
         if (p.id === termId) {
           // Mirror of the terminator; Source also sends a second packet with
           // body "\x00\x01\x00\x00" - swallow it briefly if present.
