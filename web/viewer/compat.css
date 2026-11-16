@@ -1,0 +1,42 @@
+/* Minimal stand-ins for the W3.CSS classes and the Material Icons class used by the
+   upstream 2D viewer. The upstream page loads both from third-party CDNs; we serve
+   everything ourselves (strict CSP, no external requests). */
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'liga';
+}
+.w3-row::after, .w3-container::after, .w3-bar::after { content: ""; display: table; clear: both; }
+.w3-container { padding: 0.01em 16px; }
+.w3-col { float: left; width: 100%; box-sizing: border-box; }
+.w3-col.l1 { width: 8.33333%; }
+.w3-col.l2 { width: 16.66666%; }
+.w3-col.l3 { width: 24.99999%; }
+.w3-col.l4 { width: 33.33333%; }
+.w3-col.l6 { width: 49.99999%; }
+.w3-col.l9 { width: 74.99999%; }
+.w3-bar { width: 100%; overflow: hidden; }
+.w3-bar .w3-button { white-space: normal; float: left; }
+.w3-button {
+  border: none; display: inline-block; padding: 8px 16px; vertical-align: middle; overflow: hidden;
+  text-decoration: none; color: inherit; background-color: inherit; text-align: center; cursor: pointer;
+  white-space: nowrap; user-select: none;
+}
+.w3-button:hover { color: #000; background-color: #ccc; }
+.w3-small { font-size: 12px !important; }
+.w3-medium { font-size: 15px !important; }
+.w3-right-align { text-align: right !important; }
+.w3-left-align { text-align: left !important; }
+.w3-center { text-align: center !important; }
+.w3-dark-grey { color: #fff !important; background-color: #616161 !important; }
+.w3-blue { color: #fff !important; background-color: #2196f3 !important; }

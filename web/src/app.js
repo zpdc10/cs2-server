@@ -12,6 +12,9 @@ import {
   listDemoFiles, resolveDemoPath, isInsideRealRoot, sendFile,
 } from './demos.js';
 import {
+  VIEWER_CSP, viewerAvailable, demoPathFromViewerUrl, resolveViewerFile, sendViewerFile,
+} from './viewer.js';
+import {
   buildMatchConfig, quickScrimCommands, quickScrimNote, isValidMapName,
 } from './matchconfig.js';
 import { buildAuthUrl, verifyAssertion } from './openid.js';
@@ -102,6 +105,8 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   const flashes = new Map(); // session nonce -> flash (one-shot)
   // MatchZy reports no "practice" state (gamestate is none/warmup), so remember what the panel last set.
   let panelMode = null;
+  const viewerEnabled = viewerAvailable(config.viewerDir);
+  if (!viewerEnabled) log.log?.(`[web] 2D viewer not found in ${config.viewerDir}; Watch 2D links are hidden`);
 
   // ---- cached server status -------------------------------------------------
   let statusCache = { at: 0, value: null, pending: null };
@@ -290,6 +295,22 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       return res.end(method === 'HEAD' ? undefined : body);
     }
 
+    // --- 2D demo viewer (static bundle + demo feed) ---
+    if ((p === '/viewer' || p.startsWith('/viewer/')) && (method === 'GET' || method === 'HEAD')) {
+      if (!viewerEnabled) throw new HttpError(404, 'The 2D viewer is not installed in this build');
+      if (p === '/viewer') return redirect(res, '/viewer/', 301);
+      res.setHeader('Content-Security-Policy', VIEWER_CSP);
+      if (p === '/viewer/download') {
+        const rel = demoPathFromViewerUrl(url.searchParams.get('url'), config.publicOrigin);
+        const abs = rel && resolveDemoPath(config.demosDir, rel);
+        if (!abs || !(await isInsideRealRoot(config.demosDir, abs))) throw new HttpError(404, 'Not found');
+        return sendFile(req, res, abs, { extraHeaders: (st) => ({ 'X-Demo-Length': String(st.size) }) });
+      }
+      const file = resolveViewerFile(config.viewerDir, p);
+      if (!file || !(await sendViewerFile(req, res, file))) throw new HttpError(404, 'Not found');
+      return undefined;
+    }
+
     // --- MatchZy -> web APIs (token protected) ---
     if (p === '/api/matchzy/events') {
       if (method !== 'POST') throw new HttpError(405, 'Method not allowed');
@@ -338,7 +359,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       const rows = buildDemoRows(store, await listDemoFiles(config.demosDir));
       return page(res, {
         title: 'Demos', session, active: 'demos',
-        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows)}</section>`,
+        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows, { viewer: viewerEnabled })}</section>`,
       });
     }
 
@@ -354,7 +375,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       return page(res, {
         title: 'Server', session, active: 'home',
         body: `${statusCard(status, connect)}
-<section class="card"><div class="card-head"><h2>Latest demos</h2><a href="/demos" class="small">All demos →</a></div>${demosTable(rows, { compact: true })}</section>`,
+<section class="card"><div class="card-head"><h2>Latest demos</h2><a href="/demos" class="small">All demos →</a></div>${demosTable(rows, { compact: true, viewer: viewerEnabled })}</section>`,
       });
     }
 

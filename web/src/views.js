@@ -1,5 +1,7 @@
 // Server-rendered HTML (no client framework, no external assets).
 
+import { VIEWER_EXT_RE, viewerHref } from './viewer.js';
+
 export const esc = (v) => String(v ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -92,7 +94,7 @@ export function resultClass(a, b) {
   return a > b ? 'win1' : 'win2';
 }
 
-export function demosTable(rows, { compact = false } = {}) {
+export function demosTable(rows, { compact = false, viewer = false } = {}) {
   if (!rows.length) return '<p class="muted">No demos yet. Demos are recorded automatically when a match goes live.</p>';
   const trs = rows.map((r) => `<tr>
     <td class="nowrap">${esc((r.date || '').replace('T', ' ').slice(0, 16))}</td>
@@ -100,7 +102,7 @@ export function demosTable(rows, { compact = false } = {}) {
     <td class="teams"><span class="${resultClass(r.score1, r.score2) === 'win1' ? 'w' : ''}">${esc(r.team1 || '?')}</span> <span class="muted">vs</span> <span class="${resultClass(r.score1, r.score2) === 'win2' ? 'w' : ''}">${esc(r.team2 || '?')}</span></td>
     <td class="score nowrap">${esc(scoreText(r.score1, r.score2))}${r.status === 'live' ? ' <span class="tag live">live</span>' : ''}</td>
     ${compact ? '' : `<td class="nowrap muted">${esc(fmtBytes(r.size))}</td>`}
-    <td><a class="btn small" href="${esc(demoHref(r.path))}" download>Download</a></td>
+    <td class="nowrap">${viewer && r.status !== 'live' && VIEWER_EXT_RE.test(r.path) ? `<a class="btn small" href="${esc(viewerHref(r.path))}" title="Watch a 2D replay in the browser">Watch 2D</a> ` : ''}<a class="btn small" href="${esc(demoHref(r.path))}" download>Download</a></td>
   </tr>`).join('');
   return `<div class="table-wrap"><table class="demos">
   <thead><tr><th>Date</th><th>Map</th><th>Teams</th><th>Score</th>${compact ? '' : '<th>Size</th>'}<th></th></tr></thead>

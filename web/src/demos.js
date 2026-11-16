@@ -154,7 +154,7 @@ function contentDisposition(name) {
 }
 
 /** Stream a file with Content-Length / Range / HEAD / conditional support. */
-export async function sendFile(req, res, abs, { downloadName } = {}) {
+export async function sendFile(req, res, abs, { downloadName, extraHeaders } = {}) {
   let fh;
   try {
     fh = await fsp.open(abs, 'r');
@@ -181,6 +181,7 @@ export async function sendFile(req, res, abs, { downloadName } = {}) {
       'Last-Modified': lastModified,
       'Cache-Control': 'public, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
+      ...(typeof extraHeaders === 'function' ? extraHeaders(st) : {}),
     };
 
     if (req.headers['if-none-match'] === etag) {

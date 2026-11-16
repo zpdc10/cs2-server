@@ -1,4 +1,5 @@
 // Central configuration, read once from the environment (see NOTES.md for the full list).
+import { fileURLToPath } from 'node:url';
 
 const DEFAULT_MAP_POOL = 'de_ancient,de_anubis,de_cache,de_dust2,de_inferno,de_mirage,de_nuke';
 
@@ -67,6 +68,8 @@ export function loadConfig(env = process.env) {
 
     dataDir: env.DATA_DIR || '/data/web',
     demosDir: env.DEMOS_DIR || '/data/demos',
+    // Built 2D viewer bundle (Dockerfile stage `viewer`). If index.html is missing there, the viewer is off.
+    viewerDir: env.VIEWER_DIR || fileURLToPath(new URL('../viewer-dist', import.meta.url)),
     mapPool: list(env.MAP_POOL, DEFAULT_MAP_POOL),
   };
 }

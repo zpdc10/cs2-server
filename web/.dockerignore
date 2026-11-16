@@ -5,3 +5,4 @@ npm-debug.log
 NOTES.md
 Dockerfile
 .dockerignore
+viewer-dist
