@@ -9,14 +9,23 @@ ARG NODE_IMAGE=node:22.23-alpine3.24
 ARG GO_IMAGE=golang:1.27-alpine
 ARG VIEWER_REPO=https://github.com/sparkoo/csgo-2d-demo-viewer.git
 ARG VIEWER_REF=df5a8beacb06fe1c9c898d693ed5d00c65297747
+# Demo parser used by the viewer. Upstream pins v6.0.0-rc.1, which fails on current CS2 demos
+# ("ErrDecodeFailed ... insufficient buffer"); rc.2 reads them. Set to "" to keep upstream's pin.
+ARG DEMOINFOCS_VERSION=v6.0.0-rc.2
 
 FROM ${GO_IMAGE} AS viewer-src
 ARG VIEWER_REPO
 ARG VIEWER_REF
+ARG DEMOINFOCS_VERSION
 RUN apk add --no-cache git \
  && git init -q /src && cd /src \
  && git fetch -q --depth 1 "$VIEWER_REPO" "$VIEWER_REF" && git checkout -q FETCH_HEAD
 WORKDIR /src/parser
+# Report parse failures to the page (upstream only prints them, so the player shows "Loading match..." forever).
+RUN grep -q 'fmt.Printf("Failed to parse a demo: %+v \\n", err)' wasm.go \
+ && sed -i 's|fmt.Printf("Failed to parse a demo: %+v \\n", err)|fmt.Printf("Failed to parse a demo: %+v \\n", err); js.Global().Call("postMessage", "parse-error:"+err.Error())|' wasm.go \
+ && grep -q '"parse-error:"' wasm.go \
+ && if [ -n "$DEMOINFOCS_VERSION" ]; then go get "github.com/markus-wa/demoinfocs-golang/v6@$DEMOINFOCS_VERSION"; fi
 RUN mkdir -p /out/wasm \
  && GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o /out/wasm/csdemoparser.wasm ./wasm.go \
  && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm/

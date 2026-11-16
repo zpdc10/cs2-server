@@ -359,7 +359,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       const rows = buildDemoRows(store, await listDemoFiles(config.demosDir));
       return page(res, {
         title: 'Demos', session, active: 'demos',
-        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows, { viewer: viewerEnabled })}</section>`,
+        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${viewerEnabled ? '<a class="btn small" href="/viewer/" title="Opens in your browser; the file is not uploaded">Watch your own demo in 2D</a> ' : ''}${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows, { viewer: viewerEnabled })}</section>`,
       });
     }
 
