@@ -67,6 +67,8 @@ public partial class DeathmatchModePlugin
         player.GiveNamedItem("weapon_knife");
         var weapon = GunGameLevels[l];
         if (weapon != "weapon_knife") player.GiveNamedItem(weapon);
+        // Always full kevlar + helmet: on spawn and with every new gun (RemoveWeapons can take the armor too).
+        player.GiveNamedItem("item_assaultsuit");
         var money = player.InGameMoneyServices;
         if (money != null)
         {

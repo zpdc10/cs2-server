@@ -19,7 +19,8 @@ anywhere at any time, $16000 every life, kevlar + helmet, infinite reserve ammo,
 Every kill in deathmatch (not gun game) refills the magazines of all your guns and gives +25 HP and +10 armor,
 each capped at 100.
 
-Gun game (`GunGame.cs`): free for all, no buying, no money, no map-placed weapons; the plugin hands out the guns.
+Gun game (`GunGame.cs`): free for all, no buying, no money, no map-placed weapons; the plugin hands out the guns,
+and full kevlar + helmet on every spawn and with every new gun.
 Every kill moves you to the next of 19 levels: the 18 guns in `GunGamePool` in a new random order every game (on start and after each win), then the knife.
 Only a knife kill made on the knife level wins; then levels reset and the round restarts after 6 s. Getting knifed
 sends you back one level (never below level 1). Change the guns in `GunGamePool` (no knife there; it is added last).
