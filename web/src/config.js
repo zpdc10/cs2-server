@@ -3,7 +3,7 @@
 const DEFAULT_MAP_POOL = 'de_ancient,de_anubis,de_cache,de_dust2,de_inferno,de_mirage,de_nuke';
 
 function list(value, fallback = '') {
-  return String(value ?? fallback)
+  return String(value || fallback)
     .split(/[\s,]+/)
     .map((s) => s.trim())
     .filter(Boolean);
