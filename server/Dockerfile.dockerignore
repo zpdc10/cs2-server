@@ -6,3 +6,6 @@
 !plugins/SteamGroupAdmins/**
 plugins/SteamGroupAdmins/bin/
 plugins/SteamGroupAdmins/obj/
+!plugins/PracticeExtras/**
+plugins/PracticeExtras/bin/
+plugins/PracticeExtras/obj/
