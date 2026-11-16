@@ -28,7 +28,7 @@ services:
       MATCHZY_EVENTS_TOKEN: ${MATCHZY_EVENTS_TOKEN:-}
       # server settings (joedwards32/cs2 image variables)
       CS2_SERVERNAME: ${CS2_SERVERNAME:-CS2 Practice & Scrims}
-      CS2_MAXPLAYERS: ${CS2_MAXPLAYERS:-12}
+      CS2_MAXPLAYERS: ${CS2_MAXPLAYERS:-13}
       CS2_PORT: "27015"
       CS2_LAN: "0"
       CS2_GAMETYPE: "0"

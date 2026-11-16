@@ -163,7 +163,7 @@ treats unquoted `//` as a comment and `:` as a separator.
 2. `de_cache` internal map name assumed (Cache was re-added to the game in April 2026 and to Active Duty in July 2026).
 3. Whether RCON replies include output printed by CSS plugins (`get5_status`, `matchzy_listbackups`) - normally yes
    for CS2 console output during the RCON command, but verify on the live server.
-4. Whether CSTV takes a player slot in CS2 at `-maxplayers 12`; if the 12th person can't join, raise `CS2_MAXPLAYERS` to 13.
+4. CSTV takes a player slot (A2S shows it as a bot), so the default is `CS2_MAXPLAYERS=13`: 5v5 + 2 coaches + CSTV.
 5. CSS `core.json` is left at its defaults (`FollowCS2ServerGuidelines: true`, gamedata auto-update on). MatchZy did
    not document needing it off.
 6. Host folders must be writable by uid 1000 (see `unraid/README.md`); the wrapper exits with a clear message otherwise.
