@@ -64,6 +64,7 @@ public partial class DeathmatchModePlugin : BasePlugin
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+        AddCommandListener("drop", OnDrop, HookMode.Pre);
     }
 
     /// <summary>True when MatchZy (with its stale isSleep) would reset match warmup although it normally ignores the command.</summary>
@@ -179,7 +180,7 @@ public partial class DeathmatchModePlugin : BasePlugin
                 break;
             case Variant.GunGame:
                 // No buying, no money, no weapons lying on the map: the plugin hands out every gun.
-                Server.ExecuteCommand("mp_buy_anywhere 0; mp_buytime 0; mp_startmoney 0; mp_maxmoney 0; mp_weapons_allow_map_placed 0");
+                Server.ExecuteCommand("exec cs2-stack/gungame.cfg");
                 break;
         }
 

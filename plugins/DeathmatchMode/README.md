@@ -12,7 +12,7 @@ deathmatch mode you can switch to and from live, like MatchZy's `.prac` / `.matc
 | `.gg`, `.gungame`, `css_gg`, `css_dm gg` | admins | Gun game |
 | `.level` / `.lvl` | everyone, in gun game | Shows your level and gun |
 | `.prac` / `.match` / `.exitprac` (MatchZy) | admins | Leave deathmatch; all normal settings come back |
-| `css_dm_status` | server / RCON | Prints `deathmatch=on|off variant=ffa|team` (the web panel uses it) |
+| `css_dm_status` | server / RCON | Prints `deathmatch=on|off variant=ffa|team|gg` (the web panel uses it) |
 
 Deathmatch: respawn on death, random spawns (the deathmatch spawn points of Valve maps), 2 s spawn protection, buy
 anywhere at any time, $16000 every life, kevlar + helmet, infinite reserve ammo, no C4, 30 minute rounds that roll over.
@@ -49,6 +49,6 @@ It uses the normal competitive game mode plus cvars, and MatchZy's built-in "sle
 MatchZy's own `.sleep` / `css_sleep` now also starts deathmatch (sleep mode is only used for that here).
 State is in memory: after a server or plugin restart deathmatch is off (MatchZy starts in match mode).
 
-Files: `server/cfg/cs2-stack/deathmatch*.cfg`, `server/cfg/MatchZy/{sleep,warmup,prac}_override.cfg`.
+Files: `server/cfg/cs2-stack/deathmatch*.cfg`, `server/cfg/cs2-stack/gungame.cfg` (exec'd by the plugin after deathmatch.cfg, same reset rules), `server/cfg/MatchZy/{sleep,warmup,prac}_override.cfg`.
 When adding a cvar to `deathmatch.cfg`, also reset it in `deathmatch_off.cfg` unless both MatchZy's `warmup.cfg` and
 `prac.cfg` set it (if only one does, reset it in the other one's `*_override.cfg`).

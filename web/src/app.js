@@ -82,9 +82,9 @@ export function extractJson(text) {
   try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
 }
 
-/** Parses the DeathmatchMode plugin's css_dm_status reply ("deathmatch=on variant=ffa"); null if the plugin did not answer. */
 const DM_TITLES = { ffa: 'Deathmatch (free for all)', team: 'Team deathmatch', gg: 'Gun game' };
 
+/** Parses the DeathmatchMode plugin's css_dm_status reply ("deathmatch=on variant=ffa"); null if the plugin did not answer. */
 export function parseDmStatus(text) {
   const m = /deathmatch=(on|off)\s+variant=(ffa|team|gg)/.exec(String(text || ''));
   return m ? { on: m[1] === 'on', variant: m[2] } : null;
@@ -226,7 +226,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
           return out(title, o, true, `${title} is on. Switch to practice or exit to match mode to leave it.`);
         }
         return out(title, o, false, dm
-          ? 'Deathmatch did not start (yet). If a match is running, cancel it first; otherwise refresh in a few seconds.'
+          ? `${title} did not start (yet). If a match is running, cancel it first; otherwise refresh in a few seconds.`
           : 'The server did not answer css_dm_status. Is the DeathmatchMode plugin loaded?');
       }
       case 'practice': {

@@ -1,5 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 
 namespace DeathmatchMode;
@@ -22,10 +23,12 @@ public partial class DeathmatchModePlugin
 
     private const float GunGameRestartDelay = 6.0f;
 
-    private readonly Dictionary<ulong, int> _ggLevel = new(); // SteamID64 (or slot for bots) -> level index
+    private readonly Dictionary<int, int> _ggLevel = new();   // player slot -> level index
     private bool _ggRoundOver;                                // between a win and the restart
+    private int _ggGame;                                      // bumped by every reset; stale win timers check it
 
-    private static ulong Key(CCSPlayerController p) => p.SteamID != 0 ? p.SteamID : (ulong)p.Slot;
+    // Player slot: stable while connected (unlike SteamID, which is 0 until Steam auth finishes); cleared on disconnect.
+    private static int Key(CCSPlayerController p) => p.Slot;
 
     private int LevelOf(CCSPlayerController p) => _ggLevel.TryGetValue(Key(p), out var l) ? l : 0;
 
@@ -35,6 +38,7 @@ public partial class DeathmatchModePlugin
     {
         _ggLevel.Clear();
         _ggRoundOver = false;
+        _ggGame++;
     }
 
     private void ShowLevel(CCSPlayerController player)
@@ -104,11 +108,13 @@ public partial class DeathmatchModePlugin
             string name = attacker.PlayerName;
             Server.PrintToChatAll($"{Prefix} {ChatColors.Gold}{name} wins gun game!{ChatColors.Default} New round in {GunGameRestartDelay:0} seconds.");
             foreach (var p in Utilities.GetPlayers()) if (p.IsValid && !p.IsBot) p.PrintToCenter($"{name} wins gun game!");
+            int game = _ggGame;
             AddTimer(GunGameRestartDelay, () =>
             {
-                if (!_active || _variant != Variant.GunGame) return;
-                GunGameReset();
+                if (!_active || _variant != Variant.GunGame || _ggGame != game) return;
                 Server.ExecuteCommand("mp_restartgame 1");
+                // Kills keep not counting until the restart (1 s) has actually happened.
+                AddTimer(1.2f, () => { if (_ggGame == game) GunGameReset(); });
             });
             return HookResult.Continue;
         }
@@ -124,6 +130,13 @@ public partial class DeathmatchModePlugin
             if (_active && _variant == Variant.GunGame && attacker.IsValid) GiveLevelWeapon(attacker);
         });
         return HookResult.Continue;
+    }
+
+    // Gun game: no dropping your gun for someone on a lower level.
+    private HookResult OnDrop(CCSPlayerController? player, CommandInfo info)
+    {
+        if (!_active || _variant != Variant.GunGame || player == null || !player.IsValid) return HookResult.Continue;
+        return HookResult.Handled;
     }
 
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect ev, GameEventInfo info)
