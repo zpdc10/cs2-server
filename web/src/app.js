@@ -334,7 +334,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     }
 
     if (p === '/demos' && method === 'GET') {
-      const { session } = await currentUser(req);
+      const session = sessions.read(req);
       const rows = buildDemoRows(store, await listDemoFiles(config.demosDir));
       return page(res, {
         title: 'Demos', session, active: 'demos',
@@ -345,7 +345,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     if (p === '/' && method === 'GET') {
       const { session, member } = await currentUser(req);
       const status = await getStatus();
-      const rows = buildDemoRows(store, await listDemoFiles(config.demosDir)).slice(0, 8);
+      const rows = buildDemoRows(store, (await listDemoFiles(config.demosDir)).sort((x, y) => y.mtime - x.mtime).slice(0, 8));
       const connect = {
         address: config.connectAddress,
         passwordProtected: !!config.serverPassword || status.passworded,

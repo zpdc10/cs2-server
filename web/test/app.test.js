@@ -60,6 +60,8 @@ test('match config: quick scrim without rosters, single map only', () => {
   assert.equal(ok.quick, true);
   assert.equal(ok.playout, true); // default ON
   assert.deepEqual(quickScrimCommands(ok).at(-1), 'css_map de_nuke');
+  const four = buildMatchConfig({ team1: 'A', team2: 'B', format: 'map', map: 'de_nuke', players_per_team: '4', min_players_to_ready: '4' }, { matchId: 2, mapPool: [] });
+  assert.ok(quickScrimCommands(four).includes('css_readyrequired 8'));
   const bad = buildMatchConfig({ team1: 'A', team2: 'B', format: 'bo1' }, { matchId: 1, mapPool: ['de_a', 'de_b'] });
   assert.ok(bad.errors.length);
   const half = buildMatchConfig({ team1: 'A', team2: 'B', format: 'map', map: 'de_nuke', team1_players: '76561197960290419' }, { matchId: 1, mapPool: [] });

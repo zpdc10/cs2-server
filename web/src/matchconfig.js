@@ -158,6 +158,7 @@ export function quickScrimCommands({ config, playout, knife }) {
   void playout;
   return [
     'css_exitprac',
+    `css_readyrequired ${config.min_players_to_ready * 2}`, // server-wide total, both teams
     'matchzy_playout_enabled_default false',
     `matchzy_knife_enabled_default ${knife ? 'true' : 'false'}`,
     `css_team1 ${config.team1.name}`,

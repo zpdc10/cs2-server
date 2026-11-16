@@ -13,7 +13,7 @@ Self-hosted Counter-Strike 2 server for Unraid with practice and scrim/match mod
 
 1. Copy `.env.example` to `.env` and fill in the secrets (GSLT from https://steamcommunity.com/dev/managegameservers, RCON password, session secret, events token, tunnel token, `CONNECT_ADDRESS`).
 2. Follow `unraid/README.md` to create the folders (owned by uid 1000) and start the stack with Compose Manager.
-3. Forward UDP and TCP 27015 to the Unraid host. Point the tunnel hostname at `http://web:8080`.
+3. Forward **UDP** 27015 to the Unraid host (not TCP: that is RCON and must stay on the LAN). Point the tunnel hostname at `http://web:8080`.
 
 Never commit `.env`: this repository is public.
 

@@ -44,7 +44,8 @@ if [[ ${need_install} -eq 1 ]]; then
     cp -rf "${DIST}/css/addons/."     "${ADDONS}/"
     cp -rf "${DIST}/matchzy/addons/." "${ADDONS}/"
     # MatchZy's stock cfgs (cfg/MatchZy/*.cfg). Our settings live in *_override.cfg, copied below.
-    cp -rf "${DIST}/matchzy/cfg/."    "${CSGO}/cfg/"
+    # No-clobber: never overwrite operator-edited MatchZy files (admins.json, whitelist, database.json...).
+    cp -rn "${DIST}/matchzy/cfg/."    "${CSGO}/cfg/"
     cp -f "${DIST}/VERSIONS" "${MARKER}"
 else
     log "Metamod/CSS/MatchZy already at $(tr '\n' ' ' < "${MARKER}")"
@@ -54,8 +55,9 @@ fi
 # 2. SteamGroupAdmins (built in the image from plugins/SteamGroupAdmins) - refreshed every start
 # ---------------------------------------------------------------------------------------------------
 if [[ -f "${DIST}/SteamGroupAdmins/SteamGroupAdmins.dll" ]]; then
-    rm -rf "${CSS_DIR}/plugins/SteamGroupAdmins"
+    # Keep members_cache.json / granted.json so admins still work after a restart while Steam is down.
     mkdir -p "${CSS_DIR}/plugins/SteamGroupAdmins"
+    find "${CSS_DIR}/plugins/SteamGroupAdmins" -maxdepth 1 -type f ! -name '*.json' -delete
     cp -rf "${DIST}/SteamGroupAdmins/." "${CSS_DIR}/plugins/SteamGroupAdmins/"
     log "SteamGroupAdmins installed"
 else
