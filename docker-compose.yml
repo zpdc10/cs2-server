@@ -1,0 +1,87 @@
+# CS2 practice + scrim stack (see docs/CONTRACT.md). Copy .env.example to .env and fill it in first.
+#
+#   docker compose up -d --build
+#
+# First start downloads CS2 (~60 GB) into ${APPDATA}/cs2-data; later starts only apply game updates.
+# After a CS2 update, just restart the cs2 container: it updates the game, re-patches gameinfo.gi for
+# Metamod and re-checks the plugins.
+
+name: cs2
+
+services:
+  cs2:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: cs2-stack/cs2:local
+    container_name: cs2
+    hostname: cs2
+    restart: unless-stopped
+    stdin_open: true   # allows: docker attach --sig-proxy=false cs2  (server console; detach with Ctrl-P Ctrl-Q)
+    tty: true
+    environment:
+      # contract variables
+      SRCDS_TOKEN: ${SRCDS_TOKEN:?set SRCDS_TOKEN (GSLT, app 730) in .env}
+      CS2_RCONPW: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
+      CS2_PW: ${SERVER_PASSWORD:-}
+      STEAM_GROUP_ID: ${STEAM_GROUP_ID:-}
+      MATCHZY_EVENTS_TOKEN: ${MATCHZY_EVENTS_TOKEN:-}
+      # server settings (joedwards32/cs2 image variables)
+      CS2_SERVERNAME: ${CS2_SERVERNAME:-CS2 Practice & Scrims}
+      CS2_MAXPLAYERS: ${CS2_MAXPLAYERS:-12}
+      CS2_PORT: "27015"
+      CS2_LAN: "0"
+      CS2_GAMETYPE: "0"
+      CS2_GAMEMODE: "1"
+      CS2_MAPGROUP: mg_active
+      CS2_STARTMAP: ${CS2_STARTMAP:-de_mirage}
+      CS2_SERVER_HIBERNATE: "0"
+      CS2_CHEATS: "0"
+      TV_ENABLE: "1"        # required for MatchZy demo recording (tv_record)
+      TV_AUTORECORD: "0"    # MatchZy starts/stops recording itself
+      TV_DELAY: "0"
+      TV_PW: ${TV_PASSWORD:-}
+      STEAMAPPVALIDATE: ${STEAMAPPVALIDATE:-0}
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ${CS2_DATA:-${APPDATA:-/mnt/user/appdata/cs2}/cs2-data}:/home/steam/cs2-dedicated
+      - ${APPDATA:-/mnt/user/appdata/cs2}/demos:/home/steam/cs2-dedicated/game/csgo/MatchZy_demos
+    ports:
+      - "27015:27015/udp"   # game (port-forward on the router)
+      - "27015:27015/tcp"   # RCON (do NOT port-forward; web reaches it over the compose network as cs2:27015)
+
+  web:
+    build: ./web
+    container_name: cs2-web
+    hostname: web
+    restart: unless-stopped
+    depends_on:
+      - cs2
+    environment:
+      RCON_HOST: cs2
+      RCON_PORT: "27015"
+      RCON_PASSWORD: ${RCON_PASSWORD:?set RCON_PASSWORD in .env}
+      STEAM_GROUP_ID: ${STEAM_GROUP_ID:-}
+      STEAM_API_KEY: ${STEAM_API_KEY:-}
+      PUBLIC_URL: ${PUBLIC_URL:-https://cs2.zandank.com}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      MATCHZY_EVENTS_TOKEN: ${MATCHZY_EVENTS_TOKEN:-}
+      CONNECT_ADDRESS: ${CONNECT_ADDRESS:-}   # public game address shown in connect links (not the tunnel host)
+      SERVER_PASSWORD: ${SERVER_PASSWORD:-}   # shown in the connect link to logged-in group members only
+      MAP_POOL: ${MAP_POOL:-}                 # optional, comma-separated; empty = panel default (Active Duty)
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ${APPDATA:-/mnt/user/appdata/cs2}/web:/data/web
+      - ${APPDATA:-/mnt/user/appdata/cs2}/demos:/data/demos:ro
+    ports:
+      - "${WEB_PORT:-8080}:8080"   # LAN only; public access goes through the Cloudflare Tunnel
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    container_name: cs2-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (Cloudflare Zero Trust > Tunnels)}
+    depends_on:
+      - web

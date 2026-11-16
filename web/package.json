@@ -1,0 +1,17 @@
+{
+  "name": "cs2-web-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web panel for a self-hosted CS2 practice + scrim server (MatchZy)",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "build": "node scripts/check.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "license": "MIT"
+}

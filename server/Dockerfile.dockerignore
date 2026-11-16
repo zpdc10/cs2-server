@@ -1,0 +1,8 @@
+# BuildKit uses this file (named after server/Dockerfile) instead of a root .dockerignore.
+# The build context is the repo root; only send what the cs2 image needs.
+*
+!server/cfg/**
+!server/scripts/**
+!plugins/SteamGroupAdmins/**
+plugins/SteamGroupAdmins/bin/
+plugins/SteamGroupAdmins/obj/

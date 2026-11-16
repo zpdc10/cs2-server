@@ -47,3 +47,6 @@ Hosting decisions (from owner):
   Web must work behind that reverse proxy (trust X-Forwarded-* headers, secure cookies when PUBLIC_URL is https).
   The web port does not need to be port-forwarded; only game UDP/TCP 27015 does.
 - Demos are public (confirmed).
+- Cloudflare Tunnel runs as a `cloudflared` service in docker-compose (image cloudflare/cloudflared, pinned tag,
+  `command: tunnel --no-autoupdate run`, env `TUNNEL_TOKEN` from .env). The tunnel's public hostname
+  cs2.zandank.com points to `http://web:8080`. TUNNEL_TOKEN is a secret: .env only, never committed.
