@@ -92,7 +92,7 @@ members, so group members can use everything below. No MatchZy `admins.json` is 
 | Flag MatchZy checks | Chat commands |
 |---|---|
 | `@css/config` | `.start/.force/.forcestart`, `.endmatch/.forceend`, `.restart/.rr`, `.restore N`, `.fp/.forcepause`, `.fup/.forceunpause`, `.roundknife/.rk`, `.playout`, `.readyrequired N`, `.whitelist`, `.team1/.team2 NAME`, `.globalnades`, `.settings`, `.skipveto`, `.forceready` (needs `matchzy_allow_force_ready`) |
-| `@css/map` or `@custom/prac` | `.prac/.tactics`, `.match/.exitprac`, `.dryrun`, `.sleep` |
+| `@css/map` or `@custom/prac` | `.prac/.tactics`, `.match/.exitprac`, `.dryrun`, `.sleep` (= deathmatch here), `.dm` / `.dm team` (DeathmatchMode plugin) |
 | `@css/map` | `.map NAME`, `.rmap`, `.addreadytime N` |
 | `@css/rcon` | `.rcon CMD` |
 | `@css/chat` | `.asay MSG` |
@@ -109,7 +109,7 @@ treats unquoted `//` as a comment and `:` as a separator.
 |---|---|---|
 | Practice mode | `css_prac` | Refused if a match has started (end it first). Alias `css_tactics`. |
 | Leave practice -> match mode (warmup, ready-up) | `css_match` | Alias `css_exitprac`. No-op if already in match mode or a match is running. |
-| Sleep mode (idle) | `css_sleep` | Refused while a match is running. |
+| Deathmatch | `css_dm` / `css_dm team` | DeathmatchMode plugin. Uses MatchZy's sleep mode: `css_sleep` / `.sleep` now also start deathmatch (`MatchZy/sleep_override.cfg`). Leave with `css_prac` / `css_match`. `css_dm_status` prints the state. See `plugins/DeathmatchMode/README.md`. |
 | Dry run (in practice only) | `css_dryrun` | |
 | Change map (no match running) | `css_map de_mirage` | Also `changelevel de_mirage` (plain Valve command). `css_map mirage` adds `de_`. |
 

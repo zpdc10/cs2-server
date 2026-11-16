@@ -6,6 +6,9 @@
 !plugins/SteamGroupAdmins/**
 plugins/SteamGroupAdmins/bin/
 plugins/SteamGroupAdmins/obj/
+!plugins/DeathmatchMode/**
+plugins/DeathmatchMode/bin/
+plugins/DeathmatchMode/obj/
 !plugins/PracticeExtras/**
 plugins/PracticeExtras/bin/
 plugins/PracticeExtras/obj/

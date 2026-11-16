@@ -168,6 +168,12 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
 </section>
 
 <section class="card">
+  <h2>Deathmatch</h2>
+  <p class="muted small">Respawns, random spawns, buy anywhere with $16000 every life. Players can also type .dm or .dm team (admins). Leave with practice or exit to match mode. Does not interrupt a running match.</p>
+  <div class="actions">${act('deathmatch', 'Free for all', 'primary')}${act('deathmatch_team', 'Team deathmatch')}${act('exitprac', 'Exit to match mode')}</div>
+</section>
+
+<section class="card">
   <h2>Map &amp; chat</h2>
   <form method="post" action="/admin/action" class="row-form">${hidden}<input type="hidden" name="action" value="changemap">
     <select name="map">${mapOptions(mapPool, currentMap)}</select>

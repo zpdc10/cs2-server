@@ -4,12 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import net from 'node:net';
 import { loadConfig } from '../src/config.js';
 import { openDb } from '../src/db.js';
-import { createApp, parseBackupList, extractJson } from '../src/app.js';
+import { createApp, parseBackupList, extractJson, parseDmStatus } from '../src/app.js';
 import { applyEvent, buildDemoRows } from '../src/events.js';
 import { buildMatchConfig, parseRoster, toSteamId64, quickScrimCommands } from '../src/matchconfig.js';
-import { encodeSession, decodeSession } from '../src/session.js';
+import { encodeSession, decodeSession, Sessions } from '../src/session.js';
+import { PacketDecoder, encodePacket, SERVERDATA_AUTH, SERVERDATA_AUTH_RESPONSE, SERVERDATA_EXECCOMMAND, SERVERDATA_RESPONSE_VALUE } from '../src/rcon.js';
 
 async function startApp(env = {}) {
   const demos = fs.mkdtempSync(path.join(os.tmpdir(), 'demos-'));
@@ -176,4 +178,85 @@ test('HTTP: logged-in non-member is refused; member without CSRF is refused', as
     assert.equal(r.status, 403);
     assert.match(await r.text(), /CSRF/);
   } finally { srv.close(); }
+});
+
+test('deathmatch status parsing', () => {
+  assert.deepEqual(parseDmStatus('[DM] x\ndeathmatch=on variant=team\n'), { on: true, variant: 'team' });
+  assert.deepEqual(parseDmStatus('deathmatch=off variant=ffa'), { on: false, variant: 'ffa' });
+  assert.equal(parseDmStatus('Unknown command "css_dm_status"'), null);
+  assert.equal(parseDmStatus(undefined), null);
+});
+
+/** Minimal fake CS2 RCON: css_dm turns deathmatch on unless a match is "running"; css_dm_status reports it. */
+function fakeDmRcon({ matchRunning = false } = {}) {
+  const state = { on: false, variant: 'ffa', commands: [] };
+  const srv = net.createServer((sock) => {
+    const d = new PacketDecoder();
+    sock.on('data', (chunk) => {
+      for (const p of d.push(chunk)) {
+        if (p.type === SERVERDATA_AUTH) {
+          sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, ''));
+          sock.write(encodePacket(p.id, SERVERDATA_AUTH_RESPONSE, ''));
+        } else if (p.type === SERVERDATA_EXECCOMMAND) {
+          state.commands.push(p.body);
+          let out = '';
+          const m = /^css_dm (ffa|team)$/.exec(p.body);
+          if (m) {
+            out = `[DM] Starting ${m[1]} deathmatch...`;
+            if (!matchRunning) { state.on = true; state.variant = m[1]; }
+          } else if (p.body === 'css_dm_status') out = `deathmatch=${state.on ? 'on' : 'off'} variant=${state.variant}`;
+          sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, out));
+        } else if (p.type === SERVERDATA_RESPONSE_VALUE) {
+          sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, ''));
+          sock.write(encodePacket(p.id, SERVERDATA_RESPONSE_VALUE, '\u0000\u0001'));
+        }
+      }
+    });
+  });
+  return new Promise((resolve) => srv.listen(0, '127.0.0.1', () => resolve({ srv, state })));
+}
+
+async function dmAction(action, { matchRunning = false } = {}) {
+  const rconSrv = await fakeDmRcon({ matchRunning });
+  const secret = 'x'.repeat(32);
+  const config = loadConfig({
+    PUBLIC_URL: 'http://localhost:8080', SESSION_SECRET: secret, MATCHZY_EVENTS_TOKEN: 'evtok',
+    DEMOS_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'demos-')), DATA_DIR: ':memory:', GAME_HOST: '127.0.0.1', GAME_PORT: '1',
+    STEAM_GROUP_ID: '', ADMIN_STEAM_IDS: '76561197960290419',
+    RCON_HOST: '127.0.0.1', RCON_PORT: String(rconSrv.srv.address().port), RCON_PASSWORD: 'pw',
+  });
+  config.dmCheckDelayMs = 10;
+  const quiet = { warn() {}, error() {}, log() {} };
+  const srv = http.createServer(createApp({ config, store: openDb(':memory:'), log: quiet }));
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const session = { sid: '76561197960290419', name: 'n', exp: Math.floor(Date.now() / 1000) + 600, n: 'abc' };
+    const csrf = new Sessions({ secret }).csrfToken(session);
+    const cookie = `cs2panel=${encodeURIComponent(encodeSession(secret, session))}`;
+    const r = await fetch(`${base}/admin/action`, {
+      method: 'POST', redirect: 'manual',
+      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `action=${action}&csrf=${encodeURIComponent(csrf)}`,
+    });
+    assert.equal(r.status, 303);
+    const html = await (await fetch(`${base}/admin`, { headers: { Cookie: cookie } })).text();
+    return { html, state: rconSrv.state };
+  } finally { srv.close(); rconSrv.srv.close(); }
+}
+
+test('HTTP: deathmatch buttons start deathmatch over RCON and report the result', async () => {
+  let { html, state } = await dmAction('deathmatch');
+  assert.deepEqual(state.commands.slice(0, 2), ['css_dm ffa', 'css_dm_status']);
+  assert.equal(state.on, true);
+  assert.match(html, /Deathmatch is on/);
+  assert.match(html, /Team deathmatch/); // the card's button
+
+  ({ html, state } = await dmAction('deathmatch_team'));
+  assert.equal(state.variant, 'team');
+  assert.match(html, /Deathmatch is on/);
+
+  ({ html, state } = await dmAction('deathmatch', { matchRunning: true }));
+  assert.equal(state.on, false);
+  assert.match(html, /did not start/);
 });

@@ -82,6 +82,12 @@ export function extractJson(text) {
   try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
 }
 
+/** Parses the DeathmatchMode plugin's css_dm_status reply ("deathmatch=on variant=ffa"); null if the plugin did not answer. */
+export function parseDmStatus(text) {
+  const m = /deathmatch=(on|off)\s+variant=(ffa|team)/.exec(String(text || ''));
+  return m ? { on: m[1] === 'on', variant: m[2] } : null;
+}
+
 /** Parse `matchzy_listbackups` output into backup entries. */
 export function parseBackupList(text) {
   const items = [];
@@ -106,6 +112,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   const flashes = new Map(); // session nonce -> flash (one-shot)
   // MatchZy reports no "practice" state (gamestate is none/warmup), so remember what the panel last set.
   let panelMode = null;
+  const dmCheckDelayMs = config.dmCheckDelayMs ?? 2500;
   const viewerEnabled = viewerAvailable(config.viewerDir);
   if (!viewerEnabled) log.log?.(`[web] 2D viewer not found in ${config.viewerDir}; Watch 2D links are hidden`);
   // Demos on the server are parsed here once (see replays.js); the browser only parses a visitor's own file.
@@ -134,7 +141,9 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       if (value.online && config.rconPassword) {
         try {
           const g5 = extractJson(await rcon.one('get5_status', { timeoutMs: 3000 }));
-          if (g5?.gamestate) value.mode = modeLabel(g5);
+          // Deathmatch runs in MatchZy's sleep mode, which get5_status reports as "none".
+          const dm = g5?.gamestate === 'none' ? await dmStatus() : null;
+          if (g5?.gamestate) value.mode = modeLabel(g5, dm);
         } catch { /* RCON optional for public status */ }
       }
       statusCache = { at: Date.now(), value, pending: null };
@@ -143,7 +152,12 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     return statusCache.pending;
   }
 
-  function modeLabel(g5) {
+  async function dmStatus() {
+    return parseDmStatus(await rcon.one('css_dm_status', { timeoutMs: 3000 }).catch(() => ''));
+  }
+
+  function modeLabel(g5, dm = null) {
+    if (dm?.on) return dm.variant === 'team' ? 'Team deathmatch' : 'Deathmatch (free for all)';
     const map = {
       none: 'Practice / idle', pre_veto: 'Waiting for veto', veto: 'Map veto', warmup: 'Warmup (ready up)',
       knife: 'Knife round', waiting_for_knife_decision: 'Knife decision', going_live: 'Going live',
@@ -195,6 +209,23 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     const exec = async (cmds) => (await rcon.exec(cmds)).map((o, i) => `> ${cmds[i].replace(/("X-Config-Token" )"[^"]*"/, '$1"***"')}\n${o.trim()}`).join('\n\n');
 
     switch (action) {
+      case 'deathmatch':
+      case 'deathmatch_team': {
+        const variant = action === 'deathmatch_team' ? 'team' : 'ffa';
+        const title = variant === 'team' ? 'Team deathmatch' : 'Deathmatch (free for all)';
+        const o = await exec([`css_dm ${variant}`]);
+        // The switch runs through MatchZy's cfgs; give the server a moment, then ask the plugin whether it is on.
+        await new Promise((r) => setTimeout(r, dmCheckDelayMs));
+        const dm = await dmStatus();
+        statusCache.at = 0;
+        if (dm?.on && dm.variant === variant) {
+          panelMode = null;
+          return out(title, o, true, 'Deathmatch is on. Switch to practice or exit to match mode to leave it.');
+        }
+        return out(title, o, false, dm
+          ? 'Deathmatch did not start (yet). If a match is running, cancel it first; otherwise refresh in a few seconds.'
+          : 'The server did not answer css_dm_status. Is the DeathmatchMode plugin loaded?');
+      }
       case 'practice': {
         const o = await exec(['css_prac']);
         if (!/cannot|started/i.test(o)) panelMode = 'practice';

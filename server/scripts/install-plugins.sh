@@ -1,10 +1,10 @@
 #!/bin/bash
-# Idempotent installer for Metamod:Source + CounterStrikeSharp + MatchZy + SteamGroupAdmins and our cfgs.
+# Idempotent installer for Metamod:Source + CounterStrikeSharp + MatchZy + SteamGroupAdmins + DeathmatchMode and our cfgs.
 # Called from pre.sh on every container start, after steamcmd has updated the game. Safe to run repeatedly:
 #  - the large plugin trees are only (re)copied when the image's pinned versions differ from what is installed
 #    (or a key file is missing);
 #  - gameinfo.gi is re-patched whenever a CS2 update has reset it;
-#  - our own small files (SteamGroupAdmins, *_override.cfg) are refreshed every start.
+#  - our own small files (SteamGroupAdmins, DeathmatchMode, *_override.cfg, cfg/cs2-stack/) are refreshed every start.
 set -euo pipefail
 
 log() { echo "[cs2-stack] $*"; }
@@ -63,6 +63,15 @@ if [[ -f "${DIST}/SteamGroupAdmins/SteamGroupAdmins.dll" ]]; then
 else
     log "WARNING: SteamGroupAdmins.dll missing from the image; Steam group admins will not work"
 fi
+# DeathmatchMode (built in the image from plugins/DeathmatchMode): .dm / css_dm, see cfg/cs2-stack/deathmatch.cfg
+if [[ -f "${DIST}/DeathmatchMode/DeathmatchMode.dll" ]]; then
+    rm -rf "${CSS_DIR}/plugins/DeathmatchMode"
+    mkdir -p "${CSS_DIR}/plugins/DeathmatchMode"
+    cp -rf "${DIST}/DeathmatchMode/." "${CSS_DIR}/plugins/DeathmatchMode/"
+    log "DeathmatchMode installed"
+else
+    log "WARNING: DeathmatchMode.dll missing from the image; .dm will not work"
+fi
 # PracticeExtras (.noclip chat command) - refreshed every start
 if [[ -f "${DIST}/PracticeExtras/PracticeExtras.dll" ]]; then
     mkdir -p "${CSS_DIR}/plugins/PracticeExtras"
@@ -110,6 +119,11 @@ for src in "${CFG_SRC}"/MatchZy/*.cfg; do
 done
 chmod 0640 "${CSGO}/cfg/MatchZy/config_override.cfg" 2>/dev/null || true
 log "MatchZy override cfgs written"
+
+# Our own cfgs (deathmatch on/off), exec'd from the MatchZy override cfgs above. Plain copy, no placeholders.
+mkdir -p "${CSGO}/cfg/cs2-stack"
+cp -f "${CFG_SRC}"/cs2-stack/*.cfg "${CSGO}/cfg/cs2-stack/"
+log "cs2-stack cfgs written"
 
 # ---------------------------------------------------------------------------------------------------
 # 5. Shared demo folder (host ${APPDATA}/demos is bind-mounted here; web mounts it read-only)
