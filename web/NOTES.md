@@ -197,12 +197,21 @@ replacement must match exactly once, so if upstream changes, the image build fai
 The viewer pages get their own CSP: same-origin only, plus `'wasm-unsafe-eval'` (WebAssembly) and `style-src 'unsafe-inline'`
 (PrimeReact injects styles). No third-party requests are made (checked in a browser).
 
+Phones: `viewer/compat.css` also re-lays out the player for small screens (portrait: square map on top, the panel
+scrolls below it; landscape: square map as tall as the screen, panel beside it; compact timer/rounds/controls), and
+`patch.mjs` adds touch handlers to the map (pinch to zoom, one finger to pan when zoomed). Desktop is unchanged.
+
 To update: set `VIEWER_REF` to a newer upstream commit, rebuild the image, and open a demo with Watch 2D.
 Tested 2026-11-16 at `df5a8be` + demoinfocs rc.2 in Chromium with five CS2 demos (58-365 MB, including four real
 scrim demos from the owner): each loads and plays, and opening a local file from `/viewer/` works. No console or CSP errors.
 
 Limits: for "watch your own demo" the whole file is held in the browser's memory (fine for normal match demos).
 `.zip` demos are not supported by the viewer and only get a Download button.
+
+## Phones
+
+`public/style.css` has the phone layout (≤640px): tab bar under the header, demo and backup tables shown as cards (no
+sideways scrolling), full-width buttons, 16px form fields (stops iOS zooming in), and 44px tap targets on touch screens.
 
 ## Dependencies (owner rule: OSI open source + maintained; checked 2026-11-16)
 
