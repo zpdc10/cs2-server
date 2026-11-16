@@ -25,6 +25,10 @@ COPY plugins/SteamGroupAdmins/ plugins/SteamGroupAdmins/
 RUN dotnet publish plugins/SteamGroupAdmins -c Release -o /out/SteamGroupAdmins \
  && rm -f /out/SteamGroupAdmins/CounterStrikeSharp.API.dll /out/SteamGroupAdmins/*.pdb \
  && test -f /out/SteamGroupAdmins/SteamGroupAdmins.dll
+COPY plugins/PracticeExtras/ plugins/PracticeExtras/
+RUN dotnet publish plugins/PracticeExtras -c Release -o /out/PracticeExtras \
+ && rm -f /out/PracticeExtras/CounterStrikeSharp.API.dll /out/PracticeExtras/*.pdb \
+ && test -f /out/PracticeExtras/PracticeExtras.dll
 
 # ---------------------------------------------------------------------------------------------------
 # Stage 2: fetch + verify pinned release archives and unpack them into a ready-to-copy tree
@@ -70,6 +74,7 @@ FROM ${CS2_BASE_IMAGE}
 USER root
 COPY --from=fetch        /dist                     /opt/cs2-stack/dist
 COPY --from=plugin-build /out/SteamGroupAdmins     /opt/cs2-stack/dist/SteamGroupAdmins
+COPY --from=plugin-build /out/PracticeExtras       /opt/cs2-stack/dist/PracticeExtras
 COPY server/cfg/                                   /opt/cs2-stack/cfg/
 COPY server/scripts/                               /opt/cs2-stack/scripts/
 # Our server.cfg template replaces the image's /etc/server.cfg (same {{PLACEHOLDERS}}, entry.sh renders it).
