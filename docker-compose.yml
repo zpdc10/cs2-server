@@ -44,8 +44,8 @@ services:
       STEAMAPPVALIDATE: ${STEAMAPPVALIDATE:-0}
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
-      - ${CS2_DATA:-${APPDATA:-/mnt/user/appdata/cs2}/cs2-data}:/home/steam/cs2-dedicated
-      - ${APPDATA:-/mnt/user/appdata/cs2}/demos:/home/steam/cs2-dedicated/game/csgo/MatchZy_demos
+      - ${CS2_DATA:-${APPDATA:-/mnt/user/appdata/cs2-stack}/cs2-data}:/home/steam/cs2-dedicated
+      - ${APPDATA:-/mnt/user/appdata/cs2-stack}/demos:/home/steam/cs2-dedicated/game/csgo/MatchZy_demos
     ports:
       - "27015:27015/udp"   # game (port-forward on the router)
       - "27015:27015/tcp"   # RCON (do NOT port-forward; web reaches it over the compose network as cs2:27015)
@@ -71,8 +71,8 @@ services:
       MAP_POOL: ${MAP_POOL:-}                 # optional, comma-separated; empty = panel default (Active Duty)
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
-      - ${APPDATA:-/mnt/user/appdata/cs2}/web:/data/web
-      - ${APPDATA:-/mnt/user/appdata/cs2}/demos:/data/demos:ro
+      - ${APPDATA:-/mnt/user/appdata/cs2-stack}/web:/data/web
+      - ${APPDATA:-/mnt/user/appdata/cs2-stack}/demos:/data/demos:ro
     ports:
       - "${WEB_PORT:-8080}:8080"   # LAN only; public access goes through the Cloudflare Tunnel
 

@@ -19,7 +19,7 @@ Environment variables (.env, never committed; `.env.example` lists them):
 - `STEAM_API_KEY`    optional; web may use it for player names/avatars
 - `PUBLIC_URL`       e.g. http://my.ip:8080 (used for Steam OpenID return URL)
 - `SESSION_SECRET`   web session cookie secret
-- `APPDATA`          host path base, default /mnt/user/appdata/cs2
+- `APPDATA`          host path base, default /mnt/user/appdata/cs2-stack
 - `WEB_PORT`         default 8080
 - `MATCHZY_EVENTS_TOKEN` shared secret: MatchZy remote log header value, checked by web
 
