@@ -29,6 +29,10 @@ RUN grep -q 'fmt.Printf("Failed to parse a demo: %+v \\n", err)' wasm.go \
 RUN mkdir -p /out/wasm \
  && GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o /out/wasm/csdemoparser.wasm ./wasm.go \
  && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm/
+# The same parser as a native command for the web server: it parses each stored demo once (src/replays.js).
+COPY viewer/replaycli/main.go ./cmd/replay/main.go
+RUN mkdir -p /out/bin \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bin/replay ./cmd/replay
 
 FROM ${NODE_IMAGE} AS viewer
 WORKDIR /src
@@ -38,7 +42,7 @@ COPY viewer /patch
 RUN npm ci --ignore-scripts --no-audit --no-fund \
  && npm install --ignore-scripts --no-audit --no-fund --save-exact @fontsource/material-icons@5.3.0 \
  && node /patch/patch.mjs \
- && VITE_DOWNLOAD_SERVER_URL=/viewer npx vite build --base /viewer/ \
+ && npx vite build --base /viewer/ \
  && rm -f dist/logo192.png dist/logo512.png dist/manifest.json dist/robots.txt
 COPY --from=viewer-src /out/wasm ./dist/wasm
 COPY --from=viewer-src /src/LICENSE ./dist/LICENSE.txt
@@ -66,6 +70,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/public ./public
 COPY --from=viewer /src/dist ./viewer-dist
+COPY --from=viewer-src /out/bin/replay ./bin/replay
 RUN mkdir -p /data/web /data/demos && chown node:node /data/web
 USER node
 EXPOSE 8080

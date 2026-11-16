@@ -7,7 +7,9 @@ import http from 'node:http';
 import { loadConfig } from '../src/config.js';
 import { openDb } from '../src/db.js';
 import { createApp } from '../src/app.js';
+import zlib from 'node:zlib';
 import { demoPathFromViewerUrl, resolveViewerFile, viewerHref } from '../src/viewer.js';
+import { ReplayCache, replayKey } from '../src/replays.js';
 
 const ORIGIN = 'https://cs2.example.com';
 const DEMO = '2026-11-16_20-00-00_5_de_nuke_A_vs_B.dem';
@@ -23,16 +25,40 @@ function fakeViewer() {
   return dir;
 }
 
+// Stand-in for bin/replay: writes two frames ("a", "bc") as gzip, or fails on a demo containing "bad".
+function fakeReplayBin() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'replaybin-'));
+  const bin = path.join(dir, 'replay');
+  fs.writeFileSync(bin, `#!${process.execPath}
+const fs = require('fs'); const zlib = require('zlib');
+const [demo, out] = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(path.join(dir, 'calls'))}, demo + '\\n');
+if (fs.readFileSync(demo, 'utf8').includes('bad')) { console.error('{"level":"info"}'); console.error('could not read demo: broken'); process.exit(1); }
+const frame = (s) => { const b = Buffer.alloc(4 + s.length); b.writeUInt32LE(s.length); b.write(s, 4); return b; };
+fs.writeFileSync(out + '.tmp', zlib.gzipSync(Buffer.concat([frame('a'), frame('bc')])));
+fs.renameSync(out + '.tmp', out);
+`, { mode: 0o755 });
+  return { bin, calls: () => (fs.existsSync(path.join(dir, 'calls')) ? fs.readFileSync(path.join(dir, 'calls'), 'utf8').trim().split('\n') : []) };
+}
+
+function writeOld(file, content) {
+  fs.writeFileSync(file, content);
+  const t = new Date(Date.now() - 10 * 60 * 1000);
+  fs.utimesSync(file, t, t);
+}
+
 async function startApp(env) {
   const demos = fs.mkdtempSync(path.join(os.tmpdir(), 'demos-'));
   const config = loadConfig({
     PUBLIC_URL: 'http://localhost:8080', SESSION_SECRET: 'x'.repeat(32), DEMOS_DIR: demos, DATA_DIR: ':memory:',
+    REPLAY_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'replays-')), REPLAY_BIN: path.join(os.tmpdir(), 'no-such-replay-bin'),
     GAME_HOST: '127.0.0.1', GAME_PORT: '1', STEAM_GROUP_ID: '', ...env,
   });
   const quiet = { warn() {}, error() {}, log() {} };
-  const srv = http.createServer(createApp({ config, store: openDb(':memory:'), log: quiet }));
+  const handler = createApp({ config, store: openDb(':memory:'), log: quiet });
+  const srv = http.createServer(handler);
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
-  return { srv, demos, base: `http://127.0.0.1:${srv.address().port}` };
+  return { srv, demos, replays: handler.replays, base: `http://127.0.0.1:${srv.address().port}` };
 }
 
 test('viewer: demo URL mapping only accepts our own demo files', () => {
@@ -57,16 +83,19 @@ test('viewer: static file resolution', () => {
   }
 });
 
-test('HTTP: viewer serves the bundle, feeds demos and is linked from the demos page', async () => {
-  const { srv, base, demos } = await startApp({ VIEWER_DIR: fakeViewer() });
+test('HTTP: viewer serves the bundle and server-parsed replays, linked from the demos page', async () => {
+  const fake = fakeReplayBin();
+  const { srv, base, demos, replays } = await startApp({ VIEWER_DIR: fakeViewer(), REPLAY_BIN: fake.bin });
   try {
-    fs.writeFileSync(path.join(demos, DEMO), 'demo-bytes');
+    writeOld(path.join(demos, DEMO), 'demo-bytes');
+    writeOld(path.join(demos, 'broken.dem'), 'bad');
+    fs.writeFileSync(path.join(demos, 'recording.dem'), 'still being written');
     fs.writeFileSync(path.join(demos, 'old.zip'), 'zip');
 
     let r = await fetch(`${base}/demos`);
     const html = await r.text();
     assert.ok(html.includes(`href="/viewer/player?demourl=%2Fdemos%2Ffile%2F${DEMO}"`));
-    assert.equal((html.match(/Watch 2D/g) || []).length, 1, 'no viewer link for .zip');
+    assert.equal((html.match(/Watch 2D/g) || []).length, 3, 'no viewer link for .zip');
     assert.ok(html.includes('href="/viewer/"'), 'link to open your own demo');
 
     r = await fetch(`${base}/viewer`, { redirect: 'manual' });
@@ -79,17 +108,74 @@ test('HTTP: viewer serves the bundle, feeds demos and is linked from the demos p
     assert.equal(r.headers.get('content-type'), 'application/wasm');
     r = await fetch(`${base}/viewer/.secret.js`);
     assert.equal(r.status, 404);
+    assert.equal((await fetch(`${base}/viewer/download?url=${encodeURIComponent(`/demos/file/${DEMO}`)}`)).status, 404, 'no raw demo feed');
 
-    r = await fetch(`${base}/viewer/download?url=${encodeURIComponent(`/demos/file/${DEMO}`)}`);
+    // First request queues the parse (202), then the replay is served gzip-encoded.
+    const replayUrl = `${base}/viewer/replay?url=${encodeURIComponent(`/demos/file/${DEMO}`)}`;
+    r = await fetch(replayUrl);
+    assert.equal(r.status, 202);
+    assert.equal((await r.json()).status, 'processing');
+    await replays.idle();
+    r = await fetch(replayUrl);
     assert.equal(r.status, 200);
-    assert.equal(r.headers.get('x-demo-length'), '10');
-    assert.match(r.headers.get('content-disposition'), new RegExp(`filename="${DEMO}"`));
-    assert.equal(await r.text(), 'demo-bytes');
+    assert.equal(r.headers.get('content-type'), 'application/octet-stream');
+    const body = Buffer.from(await r.arrayBuffer()); // fetch undoes Content-Encoding: gzip
+    assert.equal(body.readUInt32LE(0), 1);
+    assert.equal(body.subarray(4, 5).toString(), 'a');
+    r = await fetch(replayUrl, { headers: { 'If-None-Match': r.headers.get('etag') } });
+    assert.equal(r.status, 304);
+
+    r = await fetch(`${base}/viewer/replay?url=${encodeURIComponent('/demos/file/broken.dem')}`);
+    assert.equal(r.status, 202);
+    await replays.idle();
+    r = await fetch(`${base}/viewer/replay?url=${encodeURIComponent('/demos/file/broken.dem')}`);
+    assert.equal(r.status, 422);
+    assert.equal((await r.json()).error, 'could not read demo: broken');
+
+    r = await fetch(`${base}/viewer/replay?url=${encodeURIComponent('/demos/file/recording.dem')}`);
+    assert.equal(r.status, 409);
 
     for (const bad of ['https://evil.example.com/x.dem', '/demos/file/..%2F..%2Fetc%2Fpasswd.dem', '/demos/file/old.zip', '/demos/file/missing.dem']) {
-      r = await fetch(`${base}/viewer/download?url=${encodeURIComponent(bad)}`);
+      r = await fetch(`${base}/viewer/replay?url=${encodeURIComponent(bad)}`);
       assert.equal(r.status, 404, bad);
     }
+    assert.deepEqual(fake.calls().map((c) => path.basename(c)), [DEMO, 'broken.dem'], 'each demo parsed once');
+  } finally { srv.close(); }
+});
+
+test('replay cache: background scan parses stable demos once and prunes stale cache files', async () => {
+  const fake = fakeReplayBin();
+  const demos = fs.mkdtempSync(path.join(os.tmpdir(), 'demos-'));
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replays-'));
+  fs.mkdirSync(path.join(demos, 'sub'));
+  writeOld(path.join(demos, 'a.dem'), 'aaa');
+  writeOld(path.join(demos, 'sub', 'b.dem.gz'), 'bbb');
+  writeOld(path.join(demos, 'c.zip'), 'zip');
+  fs.writeFileSync(path.join(demos, 'live.dem'), 'recording');
+  fs.writeFileSync(path.join(cacheDir, `${'f'.repeat(32)}.rpl`), 'stale');
+  const quiet = { warn() {}, error() {}, log() {} };
+  const cache = new ReplayCache({ demosDir: demos, cacheDir, bin: fake.bin, log: quiet });
+  assert.equal(cache.enabled, true);
+  await cache.scan();
+  await cache.idle();
+  assert.deepEqual(fake.calls().map((c) => path.relative(demos, c)).sort(), ['a.dem', path.join('sub', 'b.dem.gz')]);
+  assert.ok(!fs.existsSync(path.join(cacheDir, `${'f'.repeat(32)}.rpl`)), 'stale cache file removed');
+  const st = fs.statSync(path.join(demos, 'a.dem'));
+  assert.equal((await cache.status(replayKey('a.dem', st.size, st.mtimeMs))).state, 'ready');
+  await cache.scan();
+  await cache.idle();
+  assert.equal(fake.calls().length, 2, 'nothing parsed twice');
+  assert.equal(new ReplayCache({ demosDir: demos, cacheDir, bin: '/nonexistent', log: quiet }).enabled, false);
+  zlib.gunzipSync(fs.readFileSync(path.join(cacheDir, `${replayKey('a.dem', st.size, st.mtimeMs)}.rpl`)));
+});
+
+test('HTTP: without the replay parser there are no Watch 2D links, but your own demo still works', async () => {
+  const { srv, base, demos } = await startApp({ VIEWER_DIR: fakeViewer() });
+  try {
+    writeOld(path.join(demos, DEMO), 'demo-bytes');
+    const html = await (await fetch(`${base}/demos`)).text();
+    assert.ok(!html.includes('Watch 2D') && html.includes('href="/viewer/"'));
+    assert.equal((await fetch(`${base}/viewer/replay?url=${encodeURIComponent(`/demos/file/${DEMO}`)}`)).status, 404);
   } finally { srv.close(); }
 });
 

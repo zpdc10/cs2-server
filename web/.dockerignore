@@ -6,3 +6,4 @@ NOTES.md
 Dockerfile
 .dockerignore
 viewer-dist
+bin
