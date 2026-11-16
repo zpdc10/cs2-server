@@ -67,6 +67,7 @@ test('HTTP: viewer serves the bundle, feeds demos and is linked from the demos p
     const html = await r.text();
     assert.ok(html.includes(`href="/viewer/player?demourl=%2Fdemos%2Ffile%2F${DEMO}"`));
     assert.equal((html.match(/Watch 2D/g) || []).length, 1, 'no viewer link for .zip');
+    assert.ok(html.includes('href="/viewer/"'), 'link to open your own demo');
 
     r = await fetch(`${base}/viewer`, { redirect: 'manual' });
     assert.equal(r.status, 301);
@@ -97,7 +98,7 @@ test('HTTP: without a viewer bundle there are no viewer links or routes', async 
   try {
     fs.writeFileSync(path.join(demos, DEMO), 'demo-bytes');
     const html = await (await fetch(`${base}/demos`)).text();
-    assert.ok(!html.includes('Watch 2D'));
+    assert.ok(!html.includes('Watch 2D') && !html.includes('/viewer/'));
     assert.equal((await fetch(`${base}/viewer/player`)).status, 404);
   } finally { srv.close(); }
 });

@@ -162,14 +162,18 @@ demo is downloaded once and parsed **in the visitor's browser**; the server only
 
 How it gets into the image (`Dockerfile`, stages `viewer-src` and `viewer`):
 
-1. Clone upstream at the pinned commit `VIEWER_REF` and build `parser/wasm.go` with `GOOS=js GOARCH=wasm`, plus Go's `wasm_exec.js`.
+1. Clone upstream at the pinned commit `VIEWER_REF`, bump its demo parser to `DEMOINFOCS_VERSION` (default `v6.0.0-rc.2`:
+   upstream's rc.1 fails on current CS2 demos with `ErrDecodeFailed ... insufficient buffer`), make `wasm.go` post
+   `parse-error:<reason>` to the page when parsing fails, and build it with `GOOS=js GOARCH=wasm`, plus Go's `wasm_exec.js`.
 2. `npm ci --ignore-scripts` in upstream `web/`, add `@fontsource/material-icons`, run `viewer/patch.mjs`, then
    `vite build --base /viewer/` with `VITE_DOWNLOAD_SERVER_URL=/viewer` (the player then asks `/viewer/download?url=`).
 3. Copy `dist/` (with `wasm/` and upstream's `LICENSE.txt`) to `/app/viewer-dist`. `VIEWER_DIR` overrides the path. If
    `index.html` is missing there, the viewer routes return 404 and the Watch 2D buttons are hidden.
 
 `viewer/patch.mjs` moves the app's routes under `/viewer/`, replaces the upstream home page (Faceit/extension links, hosted
-match list) with just the upload box, and removes the two third-party stylesheets (Google Fonts icons, w3schools W3.CSS)
+match list) with `viewer/UploadPage.jsx` (the upload box, a note that the file stays in the browser, and a link back to
+/demos; the Demos page links to it as "Watch your own demo in 2D"), shows parse errors instead of an endless
+"Loading match...", and removes the two third-party stylesheets (Google Fonts icons, w3schools W3.CSS)
 in favour of the self-hosted icon font and `viewer/compat.css` (stand-ins for the few W3.CSS classes the player uses). Each
 replacement must match exactly once, so if upstream changes, the image build fails instead of shipping a broken viewer.
 
@@ -177,7 +181,8 @@ The viewer pages get their own CSP: same-origin only, plus `'wasm-unsafe-eval'` 
 (PrimeReact injects styles). No third-party requests are made (checked in a browser).
 
 To update: set `VIEWER_REF` to a newer upstream commit, rebuild the image, and open a demo with Watch 2D.
-Tested 2026-11-16 at `df5a8be` with a 58 MB CS2 demo in Chromium: loads and plays in about 4 s, no console or CSP errors.
+Tested 2026-11-16 at `df5a8be` + demoinfocs rc.2 in Chromium with five CS2 demos (58-365 MB, including four real
+scrim demos from the owner): each loads and plays, and opening a local file from `/viewer/` works. No console or CSP errors.
 
 Limits: the whole demo is held in the browser's memory (fine for normal match demos; very old phones may struggle).
 `.zip` demos are not supported by the viewer and only get a Download button.
@@ -188,7 +193,7 @@ Limits: the whole demo is held in the browser's memory (fine for normal match de
 |---|---|---|---|---|
 | npm packages (runtime server) | **none** | n/a | n/a | n/a |
 | 2D viewer: sparkoo/csgo-2d-demo-viewer (built into the image, runs in the visitor's browser) | commit `df5a8be` (2026-10-30) | MIT | no tagged releases; commits weekly, last 2026-10-30 | https://github.com/sparkoo/csgo-2d-demo-viewer |
-| 2D viewer: demoinfocs-golang (CS2 demo parser, compiled to WebAssembly) | v6.0.0-rc.1 (pinned by the viewer's go.mod) | MIT | 2026-10 | https://github.com/markus-wa/demoinfocs-golang |
+| 2D viewer: demoinfocs-golang (CS2 demo parser, compiled to WebAssembly) | v6.0.0-rc.2 (`DEMOINFOCS_VERSION`; upstream pins rc.1) | MIT | rc.2 in 2026-11 | https://github.com/markus-wa/demoinfocs-golang |
 | 2D viewer: front-end packages from upstream's lockfile | preact 10.25, primereact 10.8.5, preact-iso 2.8.1, axios 1.21.0, google-protobuf 3.21.4, web-vitals 3.5.2; build only: vite 8.3.5, dotenv 16.4.5 | MIT; google-protobuf BSD-3-Clause + Apache-2.0; web-vitals Apache-2.0; dotenv BSD-2-Clause | every project released in Aug-Nov 2026 (newer majors exist; upstream pins these) | see upstream `web/package.json` |
 | 2D viewer: `@fontsource/material-icons` (replaces Google Fonts CDN) | 5.3.0 | OFL-1.1 (font Apache-2.0) | 2026-07 | https://github.com/fontsource/font-files |
 | Docker build image `golang:1.27-alpine` (viewer stage only) | Go 1.27 | BSD-3-Clause | official image | https://github.com/docker-library/golang |
