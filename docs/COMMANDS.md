@@ -9,7 +9,7 @@ None of them restart the server.
 | `.prac` | Practice mode | Refused while a match is live: `.endmatch` first |
 | `.match` / `.exitprac` | Back to scrim/match mode (warmup + ready-up) | |
 | `.dm` / `.dm team` | Deathmatch: free for all / team (respawn, random spawns, buy anywhere, $16000 every life; each kill refills your magazines, +25 HP, +10 armor, max 100) | Leave with `.prac` or `.match`. Stays on across map changes. Refused while a scrim is loaded or live: `.endmatch` first. Also on the web Control page |
-| `.gg` | Gun game: each kill gives the next gun, the last level is the knife and a knife kill on it wins; getting knifed costs a level. Everyone can type `.level` | Leave with `.prac` or `.match`. Refused while a scrim is loaded or live. Also on the web Control page |
+| `.gg` | Gun game: each kill gives the next gun (random order every game), the last level is the knife and a knife kill on it wins; getting knifed costs a level. Everyone can type `.level` | Leave with `.prac` or `.match`. Refused while a scrim is loaded or live. Also on the web Control page |
 | `.map <name>` | Change map, e.g. `.map inferno` or `.map de_inferno` | Refused while a match is live |
 | `.start` / `.forcestart` | Force-start the match | |
 | `.endmatch` | Cancel the current match | |

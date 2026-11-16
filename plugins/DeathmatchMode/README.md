@@ -20,9 +20,9 @@ Every kill in deathmatch (not gun game) refills the magazines of all your guns a
 each capped at 100.
 
 Gun game (`GunGame.cs`): free for all, no buying, no money, no map-placed weapons; the plugin hands out the guns.
-Every kill moves you to the next of 19 levels (rifles, snipers, SMGs, shotguns, pistols), the last level is the knife.
+Every kill moves you to the next of 19 levels: the 18 guns in `GunGamePool` in a new random order every game (on start and after each win), then the knife.
 Only a knife kill made on the knife level wins; then levels reset and the round restarts after 6 s. Getting knifed
-sends you back one level (never below level 1). Change the ladder in `GunGameLevels` (the last entry must stay the knife).
+sends you back one level (never below level 1). Change the guns in `GunGamePool` (no knife there; it is added last).
 
 It stays on across map changes (`.map`, web "Change map") until someone switches to practice or match mode.
 It cannot start while a match is running (knife round or live): cancel the match first.
