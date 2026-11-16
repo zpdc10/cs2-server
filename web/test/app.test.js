@@ -183,6 +183,7 @@ test('HTTP: logged-in non-member is refused; member without CSRF is refused', as
 test('deathmatch status parsing', () => {
   assert.deepEqual(parseDmStatus('[DM] x\ndeathmatch=on variant=team\n'), { on: true, variant: 'team' });
   assert.deepEqual(parseDmStatus('deathmatch=off variant=ffa'), { on: false, variant: 'ffa' });
+  assert.deepEqual(parseDmStatus('deathmatch=on variant=gg'), { on: true, variant: 'gg' });
   assert.equal(parseDmStatus('Unknown command "css_dm_status"'), null);
   assert.equal(parseDmStatus(undefined), null);
 });
@@ -200,7 +201,7 @@ function fakeDmRcon({ matchRunning = false } = {}) {
         } else if (p.type === SERVERDATA_EXECCOMMAND) {
           state.commands.push(p.body);
           let out = '';
-          const m = /^css_dm (ffa|team)$/.exec(p.body);
+          const m = /^css_dm (ffa|team|gg)$/.exec(p.body);
           if (m) {
             out = `[DM] Starting ${m[1]} deathmatch...`;
             if (!matchRunning) { state.on = true; state.variant = m[1]; }
@@ -249,12 +250,16 @@ test('HTTP: deathmatch buttons start deathmatch over RCON and report the result'
   let { html, state } = await dmAction('deathmatch');
   assert.deepEqual(state.commands.slice(0, 2), ['css_dm ffa', 'css_dm_status']);
   assert.equal(state.on, true);
-  assert.match(html, /Deathmatch is on/);
+  assert.match(html, /deathmatch( \(free for all\))? is on/i);
   assert.match(html, /Team deathmatch/); // the card's button
 
   ({ html, state } = await dmAction('deathmatch_team'));
   assert.equal(state.variant, 'team');
-  assert.match(html, /Deathmatch is on/);
+  assert.match(html, /deathmatch( \(free for all\))? is on/i);
+
+  ({ html, state } = await dmAction('gungame'));
+  assert.equal(state.variant, 'gg');
+  assert.match(html, /Gun game is on/);
 
   ({ html, state } = await dmAction('deathmatch', { matchRunning: true }));
   assert.equal(state.on, false);

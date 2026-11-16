@@ -83,8 +83,10 @@ export function extractJson(text) {
 }
 
 /** Parses the DeathmatchMode plugin's css_dm_status reply ("deathmatch=on variant=ffa"); null if the plugin did not answer. */
+const DM_TITLES = { ffa: 'Deathmatch (free for all)', team: 'Team deathmatch', gg: 'Gun game' };
+
 export function parseDmStatus(text) {
-  const m = /deathmatch=(on|off)\s+variant=(ffa|team)/.exec(String(text || ''));
+  const m = /deathmatch=(on|off)\s+variant=(ffa|team|gg)/.exec(String(text || ''));
   return m ? { on: m[1] === 'on', variant: m[2] } : null;
 }
 
@@ -157,7 +159,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   }
 
   function modeLabel(g5, dm = null) {
-    if (dm?.on) return dm.variant === 'team' ? 'Team deathmatch' : 'Deathmatch (free for all)';
+    if (dm?.on) return DM_TITLES[dm.variant] || 'Deathmatch';
     const map = {
       none: 'Practice / idle', pre_veto: 'Waiting for veto', veto: 'Map veto', warmup: 'Warmup (ready up)',
       knife: 'Knife round', waiting_for_knife_decision: 'Knife decision', going_live: 'Going live',
@@ -210,9 +212,10 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
 
     switch (action) {
       case 'deathmatch':
-      case 'deathmatch_team': {
-        const variant = action === 'deathmatch_team' ? 'team' : 'ffa';
-        const title = variant === 'team' ? 'Team deathmatch' : 'Deathmatch (free for all)';
+      case 'deathmatch_team':
+      case 'gungame': {
+        const variant = { deathmatch: 'ffa', deathmatch_team: 'team', gungame: 'gg' }[action];
+        const title = DM_TITLES[variant];
         const o = await exec([`css_dm ${variant}`]);
         // The switch runs through MatchZy's cfgs; give the server a moment, then ask the plugin whether it is on.
         await new Promise((r) => setTimeout(r, dmCheckDelayMs));
@@ -220,7 +223,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
         statusCache.at = 0;
         if (dm?.on && dm.variant === variant) {
           panelMode = null;
-          return out(title, o, true, 'Deathmatch is on. Switch to practice or exit to match mode to leave it.');
+          return out(title, o, true, `${title} is on. Switch to practice or exit to match mode to leave it.`);
         }
         return out(title, o, false, dm
           ? 'Deathmatch did not start (yet). If a match is running, cancel it first; otherwise refresh in a few seconds.'

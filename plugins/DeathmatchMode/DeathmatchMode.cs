@@ -8,7 +8,8 @@ using CounterStrikeSharp.API.Modules.Utils;
 namespace DeathmatchMode;
 
 /// <summary>
-/// Live-switchable deathmatch on top of MatchZy, without a restart or a game-mode change.
+/// Live-switchable deathmatch (free for all, team) and gun game on top of MatchZy, without a restart or a
+/// game-mode change. Gun game is free-for-all deathmatch where the plugin hands out the weapons (see GunGame.cs).
 ///
 /// How it works (see plugins/DeathmatchMode/README.md):
 ///  - .dm / css_dm runs "css_match; css_sleep". css_match cleanly leaves practice mode (MatchZy's own unprac
@@ -21,21 +22,23 @@ namespace DeathmatchMode;
 ///    cs2-stack/deathmatch_off.cfg: it puts back the cvars MatchZy's cfgs do not set, sets
 ///    matchzy_autostart_mode 1 again and calls css_dm_exited.
 /// </summary>
-public class DeathmatchModePlugin : BasePlugin
+public enum Variant { Ffa, Team, GunGame }
+
+public partial class DeathmatchModePlugin : BasePlugin
 {
     public override string ModuleName => "DeathmatchMode";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.1.0";
     public override string ModuleAuthor => "cs2-server";
-    public override string ModuleDescription => "Admin .dm command: free-for-all or team deathmatch, switchable live with MatchZy.";
+    public override string ModuleDescription => "Admin .dm / .gg: free-for-all, team deathmatch or gun game, switchable live with MatchZy.";
 
     private const string Prefix = " \x04[DM]\x01";
     private const int Money = 16000;
     private const string Permission = "@css/map"; // same level MatchZy asks for .prac / .match; @css/root implies it
 
     private bool _active;
-    private bool _teamMode;          // variant that is running (or last ran)
-    private bool? _requestedTeam;    // variant of a .dm request that has not entered yet
-    private int _entered;            // bumped by css_dm_entered, lets a request see whether it worked
+    private Variant _variant = Variant.Ffa;  // variant that is running (or last ran)
+    private Variant? _requested;             // variant of a request that has not entered yet
+    private int _entered;                    // bumped by css_dm_entered, lets a request see whether it worked
 
     // Which MatchZy mode is running, reported by our *_override.cfg hooks: warmup | practice | live | sleep.
     private string _mzMode = "warmup";
@@ -59,6 +62,8 @@ public class DeathmatchModePlugin : BasePlugin
         foreach (var c in EndCommands) AddCommandListener(c, (_, _) => { _matchLoaded = false; return HookResult.Continue; }, HookMode.Post);
         RegisterEventHandler<EventCsWinPanelMatch>((_, _) => { _matchLoaded = false; return HookResult.Continue; });
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
+        RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
     }
 
     /// <summary>True when MatchZy (with its stale isSleep) would reset match warmup although it normally ignores the command.</summary>
@@ -71,7 +76,7 @@ public class DeathmatchModePlugin : BasePlugin
         return HookResult.Handled;
     }
 
-    // ---- chat: .dm [ffa|team], .deathmatch [ffa|team] -------------------------------------------------
+    // ---- chat: .dm [ffa|team|gg], .deathmatch, .gg / .gungame ----------------------------------------
     private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
@@ -83,20 +88,29 @@ public class DeathmatchModePlugin : BasePlugin
             player.PrintToChat($"{Prefix} Already in match mode.");
             return HookResult.Handled;
         }
-        if (cmd != ".dm" && cmd != ".deathmatch") return HookResult.Continue;
-        Request(player, parts.Length > 1 ? parts[1] : "");
+        if (cmd is ".dm" or ".deathmatch") Request(player, parts.Length > 1 ? parts[1] : "");
+        else if (cmd is ".gg" or ".gungame") Request(player, "gg");
+        else if (cmd is ".level" or ".lvl" && _active && _variant == Variant.GunGame) ShowLevel(player);
         return HookResult.Continue;
     }
 
-    [ConsoleCommand("css_dm", "Start deathmatch: css_dm [ffa|team] (default ffa). Leave with css_prac / css_match.")]
-    [ConsoleCommand("css_deathmatch", "Start deathmatch: css_deathmatch [ffa|team] (default ffa).")]
+    [ConsoleCommand("css_dm", "Start deathmatch: css_dm [ffa|team|gg] (default ffa). Leave with css_prac / css_match.")]
+    [ConsoleCommand("css_deathmatch", "Start deathmatch: css_deathmatch [ffa|team|gg] (default ffa).")]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
     public void OnDmCommand(CCSPlayerController? player, CommandInfo info)
     {
         Request(player, info.ArgCount > 1 ? info.GetArg(1) : "", info);
     }
 
-    private void Request(CCSPlayerController? player, string variant, CommandInfo? info = null)
+    [ConsoleCommand("css_gg", "Start gun game. Leave with css_prac / css_match.")]
+    [ConsoleCommand("css_gungame", "Start gun game.")]
+    [CommandHelper(whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    public void OnGgCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        Request(player, "gg", info);
+    }
+
+    private void Request(CCSPlayerController? player, string variantArg, CommandInfo? info = null)
     {
         void Reply(string msg)
         {
@@ -107,39 +121,40 @@ public class DeathmatchModePlugin : BasePlugin
 
         if (player != null && !AdminManager.PlayerHasPermissions(player, Permission))
         {
-            Reply("Only admins can start deathmatch.");
+            Reply("Only admins can start deathmatch or gun game.");
             return;
         }
 
-        bool team;
-        switch (variant.Trim().ToLowerInvariant())
+        Variant variant;
+        switch (variantArg.Trim().ToLowerInvariant())
         {
-            case "": case "ffa": team = false; break;
-            case "team": case "tdm": team = true; break;
+            case "": case "ffa": variant = Variant.Ffa; break;
+            case "team": case "tdm": variant = Variant.Team; break;
+            case "gg": case "gungame": variant = Variant.GunGame; break;
             default:
-                Reply("Usage: .dm (free for all) or .dm team");
+                Reply("Usage: .dm (free for all), .dm team, or .gg (gun game)");
                 return;
         }
 
         if (!_active && (_matchLoaded || _mzMode == "live"))
         {
-            Reply("A match is loaded or running. Cancel it first (.endmatch or the web panel), then .dm.");
+            Reply("A match is loaded or running. Cancel it first (.endmatch or the web panel).");
             return;
         }
 
-        _requestedTeam = team;
+        _requested = variant;
         int before = _entered;
         // css_match first: it ends practice mode the MatchZy way (bots, spawn markers, cheats), and does nothing in
         // match warmup. css_sleep is refused by MatchZy while a match is running. Already in deathmatch (switching
-        // ffa <-> team): css_sleep alone re-runs the deathmatch cfg without a detour through match warmup.
+        // variant): css_sleep alone re-runs the deathmatch cfg without a detour through match warmup.
         Server.ExecuteCommand(_active ? "css_sleep" : "css_match; css_sleep");
-        Reply($"Starting {(team ? "team" : "free-for-all")} deathmatch...");
+        Reply($"Starting {VariantName(variant)}...");
 
         AddTimer(3.0f, () =>
         {
             if (_entered != before) return;
-            _requestedTeam = null;
-            var msg = "Deathmatch did not start. If a match is running, cancel it first (.endmatch or the web panel).";
+            _requested = null;
+            var msg = $"{VariantName(variant)} did not start. If a match is running, cancel it first (.endmatch or the web panel).";
             if (player != null && player.IsValid) player.PrintToChat($"{Prefix} {msg}");
             Server.PrintToConsole($"[DM] {msg}");
         });
@@ -154,13 +169,29 @@ public class DeathmatchModePlugin : BasePlugin
         _sleptOnce = true;
         _mzMode = "sleep";
         _entered++;
-        if (_requestedTeam.HasValue) { _teamMode = _requestedTeam.Value; _requestedTeam = null; }
-        // deathmatch.cfg sets free-for-all; team deathmatch only flips these two back.
-        Server.ExecuteCommand(_teamMode
-            ? "mp_teammates_are_enemies 0; mp_friendlyfire 0"
-            : "mp_teammates_are_enemies 1; mp_friendlyfire 1");
-        Server.PrintToChatAll($"{Prefix} {ChatColors.Green}{VariantName()} deathmatch{ChatColors.Default}: random spawns, buy anywhere, ${Money} every life.");
-        Server.PrintToChatAll($"{Prefix} Admins: {ChatColors.Green}.prac{ChatColors.Default} or {ChatColors.Green}.match{ChatColors.Default} to leave, {ChatColors.Green}.dm team{ChatColors.Default} / {ChatColors.Green}.dm ffa{ChatColors.Default} to switch.");
+        if (_requested.HasValue) { _variant = _requested.Value; _requested = null; }
+        GunGameReset();
+        // deathmatch.cfg sets free-for-all with buying; the other variants only change what differs.
+        switch (_variant)
+        {
+            case Variant.Team:
+                Server.ExecuteCommand("mp_teammates_are_enemies 0; mp_friendlyfire 0");
+                break;
+            case Variant.GunGame:
+                // No buying, no money, no weapons lying on the map: the plugin hands out every gun.
+                Server.ExecuteCommand("mp_buy_anywhere 0; mp_buytime 0; mp_startmoney 0; mp_maxmoney 0; mp_weapons_allow_map_placed 0");
+                break;
+        }
+
+        if (_variant == Variant.GunGame)
+        {
+            Server.PrintToChatAll($"{Prefix} {ChatColors.Green}Gun game{ChatColors.Default}: every kill gives you the next gun ({GunGameLevels.Length} levels). Last level is the knife: a knife kill wins. Knife someone to send them back a level. {ChatColors.Green}.level{ChatColors.Default} shows yours.");
+        }
+        else
+        {
+            Server.PrintToChatAll($"{Prefix} {ChatColors.Green}{VariantName(_variant)}{ChatColors.Default}: random spawns, buy anywhere, ${Money} every life. Each kill: full magazine, +25 HP, +10 armor.");
+        }
+        Server.PrintToChatAll($"{Prefix} Admins: {ChatColors.Green}.prac{ChatColors.Default} or {ChatColors.Green}.match{ChatColors.Default} to leave; {ChatColors.Green}.dm{ChatColors.Default} / {ChatColors.Green}.dm team{ChatColors.Default} / {ChatColors.Green}.gg{ChatColors.Default} to switch.");
     }
 
     [ConsoleCommand("css_dm_exited", "Internal: css_dm_exited warmup|practice|live, called by MatchZy/*_override.cfg")]
@@ -169,18 +200,20 @@ public class DeathmatchModePlugin : BasePlugin
     {
         var mode = info.ArgCount > 1 ? info.GetArg(1).Trim().ToLowerInvariant() : "";
         _mzMode = mode is "practice" or "live" ? mode : "warmup";
-        if (_active) Server.PrintToChatAll($"{Prefix} Deathmatch off.");
+        if (_active) Server.PrintToChatAll($"{Prefix} {VariantName(_variant)} off.");
         _active = false;
+        GunGameReset();
     }
 
     [ConsoleCommand("css_dm_status", "Prints whether deathmatch is on (used by the web panel)")]
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void OnStatus(CCSPlayerController? player, CommandInfo info)
     {
-        info.ReplyToCommand($"deathmatch={(_active ? "on" : "off")} variant={(_teamMode ? "team" : "ffa")}");
+        var v = _variant switch { Variant.Team => "team", Variant.GunGame => "gg", _ => "ffa" };
+        info.ReplyToCommand($"deathmatch={(_active ? "on" : "off")} variant={v}");
     }
 
-    // ---- full money every life -------------------------------------------------------------------------
+    // ---- spawn: full money (deathmatch) or the gun of your level (gun game) ----------------------------
     private HookResult OnPlayerSpawn(EventPlayerSpawn ev, GameEventInfo info)
     {
         if (!_active) return HookResult.Continue;
@@ -188,6 +221,11 @@ public class DeathmatchModePlugin : BasePlugin
         Server.NextFrame(() =>
         {
             if (!_active || player == null || !player.IsValid) return;
+            if (_variant == Variant.GunGame)
+            {
+                GiveLevelWeapon(player);
+                return;
+            }
             var money = player.InGameMoneyServices;
             if (money == null) return;
             money.Account = Money;
@@ -196,5 +234,10 @@ public class DeathmatchModePlugin : BasePlugin
         return HookResult.Continue;
     }
 
-    private string VariantName() => _teamMode ? "Team" : "Free-for-all";
+    private static string VariantName(Variant v) => v switch
+    {
+        Variant.Team => "Team deathmatch",
+        Variant.GunGame => "Gun game",
+        _ => "Free-for-all deathmatch",
+    };
 }
