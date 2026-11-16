@@ -11,7 +11,9 @@ import {
 import {
   listDemoFiles, resolveDemoPath, isInsideRealRoot, sendFile,
 } from './demos.js';
-import { buildMatchConfig, quickScrimCommands, isValidMapName } from './matchconfig.js';
+import {
+  buildMatchConfig, quickScrimCommands, quickScrimNote, isValidMapName,
+} from './matchconfig.js';
 import { buildAuthUrl, verifyAssertion } from './openid.js';
 import { RconClient, sanitizeArg } from './rcon.js';
 import { Sessions, safeEqual, sign } from './session.js';
@@ -98,6 +100,8 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   const configToken = sign(config.sessionSecret, 'matchconfig-token').slice(0, 32);
   const callbackPath = '/auth/steam/callback';
   const flashes = new Map(); // session nonce -> flash (one-shot)
+  // MatchZy reports no "practice" state (gamestate is none/warmup), so remember what the panel last set.
+  let panelMode = null;
 
   // ---- cached server status -------------------------------------------------
   let statusCache = { at: 0, value: null, pending: null };
@@ -133,7 +137,12 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       knife: 'Knife round', waiting_for_knife_decision: 'Knife decision', going_live: 'Going live',
       live: 'Live match', pending_restore: 'Restoring', post_game: 'Post game',
     };
-    return (map[g5.gamestate] || g5.gamestate) + (g5.paused ? ' (paused)' : '');
+    let label = map[g5.gamestate] || g5.gamestate;
+    if (g5.gamestate === 'none' || g5.gamestate === 'warmup') {
+      if (panelMode === 'practice') label = 'Practice';
+      else if (g5.gamestate === 'none') label = 'Idle';
+    }
+    return label + (g5.paused ? ' (paused)' : '');
   }
 
   // ---- auth helpers ---------------------------------------------------------
@@ -174,9 +183,13 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     const exec = async (cmds) => (await rcon.exec(cmds)).map((o, i) => `> ${cmds[i].replace(/("X-Config-Token" )"[^"]*"/, '$1"***"')}\n${o.trim()}`).join('\n\n');
 
     switch (action) {
-      case 'practice':
-        return out('Practice mode', await exec(['css_prac']));
+      case 'practice': {
+        const o = await exec(['css_prac']);
+        if (!/cannot|started/i.test(o)) panelMode = 'practice';
+        return out('Practice mode', o);
+      }
       case 'exitprac':
+        panelMode = 'match';
         return out('Exit practice', await exec(['css_exitprac']));
       case 'pause':
         return out('Pause', await exec(['css_forcepause']));
@@ -213,6 +226,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   }
 
   async function startScrim(form, user, exec, out) {
+    panelMode = 'match';
     const matchId = store.newMatchId();
     const built = buildMatchConfig(form, { matchId, mapPool: config.mapPool });
     if (built.errors.length) return out('Scrim not started', '', false, built.errors.join(' '));
@@ -226,7 +240,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       const setup = cmds.filter((c) => !c.startsWith('css_map'));
       if (onMap) {
         return out(`Quick scrim: ${cfg.team1.name} vs ${cfg.team2.name}`, await exec(setup), true,
-          'Players join, pick sides and type .ready. Nobody is kicked.');
+          `Players join, pick sides and type .ready. Nobody is kicked.${quickScrimNote(built)}`);
       }
       // Change map first; MatchZy re-runs its autostart mode after a map change, so apply the rest afterwards.
       const first = await exec([`css_map ${target}`]);
@@ -237,7 +251,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
         );
       }, 15000);
       return out(`Quick scrim: ${cfg.team1.name} vs ${cfg.team2.name}`, first, true,
-        `Changing map to ${target}; team names and settings are applied ~15 s later. Players pick sides and type .ready.`);
+        `Changing map to ${target}; team names and settings are applied ~15 s later. Players pick sides and type .ready.${quickScrimNote(built)}`);
     }
 
     store.saveConfig(matchId, user.sid, cfg);

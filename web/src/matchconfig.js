@@ -45,7 +45,8 @@ export function parseRoster(text) {
 }
 
 export function cleanTeamName(s) {
-  return String(s || '').replace(/[\u0000-\u001f"';\\{}]/g, '').trim().slice(0, 32);
+  // "//" starts a comment in the CS2 console tokenizer; quotes/semicolons would break out of the command.
+  return String(s || '').replace(/[\u0000-\u001f"';\\{}]/g, '').replace(/\/{2,}/g, '/').trim().slice(0, 32);
 }
 
 export function isValidMapName(m) {
@@ -68,7 +69,7 @@ export function buildMatchConfig(input, { matchId, mapPool }) {
 
   const format = ['map', 'bo1', 'bo3'].includes(input.format) ? input.format : 'map';
   const ppt = Math.min(5, Math.max(1, Number.parseInt(input.players_per_team, 10) || 5));
-  const minReady = Math.min(ppt, Math.max(1, Number.parseInt(input.min_players_to_ready, 10) || 1));
+  const minReady = Math.min(ppt, Math.max(1, Number.parseInt(input.min_players_to_ready, 10) || ppt));
   const playout = input.playout === undefined ? true : truthy(input.playout);
   const coachesAllowed = input.coaches === undefined ? true : truthy(input.coaches);
   const knife = input.knife === undefined ? true : truthy(input.knife);
@@ -129,10 +130,14 @@ export function buildMatchConfig(input, { matchId, mapPool }) {
     min_players_to_ready: minReady,
     spectators: { players: {} },
     cvars: {
-      matchzy_playout_enabled_default: playout ? 'true' : 'false',
+      // MatchZy's own playout switch also forces mp_overtime_enable 0, so it stays off. The server's
+      // live_override.cfg already plays out all rounds (mp_match_can_clinch 0, overtime on); match cvars are
+      // executed after MatchZy's playout handling, so "play out OFF" is done with mp_match_can_clinch 1.
+      matchzy_playout_enabled_default: 'false',
       matchzy_knife_enabled_default: knife ? 'true' : 'false',
     },
   };
+  if (!playout) config.cvars.mp_match_can_clinch = '1';
   if (format === 'map') config.map_sides = [knife ? 'knife' : 'team1_ct'];
 
   return {
@@ -148,12 +153,19 @@ export function buildMatchConfig(input, { matchId, mapPool }) {
 /** RCON commands for a "quick scrim" (no match config, nobody kicked). */
 export function quickScrimCommands({ config, playout, knife }) {
   const map = config.maplist[0];
+  // Without a match config, MatchZy re-applies live_override.cfg's mp_match_can_clinch when the match goes
+  // live, so the server default (play out all rounds + overtime) always applies here; see quickScrimNote().
+  void playout;
   return [
     'css_exitprac',
-    `matchzy_playout_enabled_default ${playout ? 'true' : 'false'}`,
+    'matchzy_playout_enabled_default false',
     `matchzy_knife_enabled_default ${knife ? 'true' : 'false'}`,
     `css_team1 ${config.team1.name}`,
     `css_team2 ${config.team2.name}`,
     `css_map ${map}`,
   ];
+}
+
+export function quickScrimNote({ playout }) {
+  return playout ? '' : ' Note: "play out all rounds" cannot be turned off without a match config (add SteamIDs); the server default (play out + overtime) applies.';
 }

@@ -48,7 +48,10 @@ test('match config: Bo3 veto with rosters', () => {
   assert.equal(config.maplist.length, 7);
   assert.equal(config.players_per_team, 5);
   assert.ok('76561197960290421' in config.team1.players);
-  assert.equal(config.cvars.matchzy_playout_enabled_default, 'true');
+  assert.equal(config.cvars.matchzy_playout_enabled_default, 'false');
+  assert.equal(config.cvars.mp_match_can_clinch, undefined);
+  const off = buildMatchConfig({ team1: 'A', team2: 'B', team1_players: '76561197960290419', team2_players: '76561197960290420', format: 'map', map: 'de_nuke', playout: '0' }, { matchId: 1, mapPool: [] });
+  assert.equal(off.config.cvars.mp_match_can_clinch, '1');
 });
 
 test('match config: quick scrim without rosters, single map only', () => {

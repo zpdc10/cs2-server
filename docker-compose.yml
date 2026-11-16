@@ -66,6 +66,9 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-https://cs2.zandank.com}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       MATCHZY_EVENTS_TOKEN: ${MATCHZY_EVENTS_TOKEN:-}
+      CONNECT_ADDRESS: ${CONNECT_ADDRESS:-}   # public game address shown in connect links (not the tunnel host)
+      SERVER_PASSWORD: ${SERVER_PASSWORD:-}   # shown in the connect link to logged-in group members only
+      MAP_POOL: ${MAP_POOL:-}                 # optional, comma-separated; empty = panel default (Active Duty)
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
       - ${APPDATA:-/mnt/user/appdata/cs2}/web:/data/web

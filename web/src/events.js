@@ -153,7 +153,7 @@ export function buildDemoRows(store, files) {
     return row;
   });
 
-  // Pass 1: exact demo_file matches; pass 2: same match + map name; pass 3: by order within match.
+  // Pass 1: exact demo_file matches; pass 2: same match id + map name.
   const attach = (row, m) => {
     claimed.add(`${m.matchid}:${m.map_number}`);
     row.mapNumber = m.map_number;

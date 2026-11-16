@@ -208,12 +208,12 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
       <label id="map-field">Map <select name="map">${mapOptions(mapPool, currentMap)}</select></label>
       <label>Veto starts <select name="veto_first"><option value="random">Random</option><option value="team1">Team 1</option><option value="team2">Team 2</option></select></label>
       <label>Players per team <input type="number" name="players_per_team" min="1" max="5" value="5"></label>
-      <label>Min. ready per team <input type="number" name="min_players_to_ready" min="1" max="5" value="1"></label>
+      <label>Min. ready per team <input type="number" name="min_players_to_ready" min="1" max="5" value="5"></label>
     </div>
     <div class="checks">
-      <label><input type="checkbox" name="playout" value="1" checked> Play out all rounds</label>
-      <label><input type="checkbox" name="coaches" value="1" checked> Coaches allowed</label>
-      <label><input type="checkbox" name="knife" value="1" checked> Knife for sides</label>
+      <input type="hidden" name="playout" value="0"><label><input type="checkbox" name="playout" value="1" checked> Play out all rounds</label>
+      <input type="hidden" name="coaches" value="0"><label><input type="checkbox" name="coaches" value="1" checked> Coaches allowed</label>
+      <input type="hidden" name="knife" value="0"><label><input type="checkbox" name="knife" value="1" checked> Knife for sides</label>
     </div>
     <p class="muted small">With SteamIDs for both teams the match is locked (others are kicked, coaches type <code>.coach t</code>/<code>.coach ct</code>), and Bo1/Bo3 vetoes are available.
       Without any SteamIDs a quick scrim is set up instead (team names, map, playout; players pick sides and <code>.ready</code>).
@@ -224,6 +224,7 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
 
 <section class="card">
   <div class="card-head"><h2>Round backups</h2></div>
+  <p class="muted small">MatchZy pauses the match after a restore: press Unpause when both teams are ready.</p>
   <form method="get" action="/admin" class="row-form">
     <input type="hidden" name="backups" value="1">
     <input name="matchid" inputmode="numeric" pattern="[0-9]*" placeholder="Match ID (empty = current)" aria-label="Match ID">

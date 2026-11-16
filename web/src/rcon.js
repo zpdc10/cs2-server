@@ -200,6 +200,7 @@ export class RconClient {
 export function sanitizeArg(s, maxLen = 120) {
   return String(s ?? '')
     .replace(/[\u0000-\u001f\u007f"';\\]/g, '')
+    .replace(/\/{2,}/g, '/ /') // "//" starts a comment in the CS2 console
     .trim()
     .slice(0, maxLen);
 }

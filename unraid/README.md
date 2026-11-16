@@ -16,14 +16,14 @@ git clone https://github.com/<you>/<repo>.git src
 
 # Data folders. The cs2 container runs as uid/gid 1000, so it must own its folders.
 mkdir -p /mnt/user/appdata/cs2/cs2-data /mnt/user/appdata/cs2/demos /mnt/user/appdata/cs2/web
-chown -R 1000:1000 /mnt/user/appdata/cs2/cs2-data /mnt/user/appdata/cs2/demos
+chown -R 1000:1000 /mnt/user/appdata/cs2/cs2-data /mnt/user/appdata/cs2/demos /mnt/user/appdata/cs2/web
 ```
 
 * Needs about **60 GB** free for `cs2-data`, plus room for demos (~50-150 MB per map). If `appdata` is on a small cache
   pool, set `APPDATA` to a share with enough space, or set the appdata share to use the array.
 * Unraid's "New Permissions" / Docker Safe New Perms tool resets ownership to `nobody:users`; run the `chown` again
   afterwards (the cs2 container stops with a clear error if it cannot write).
-* The web folder's owner depends on the web image (see `web/NOTES.md`).
+* The web container also runs as uid 1000: `chown -R 1000:1000 /mnt/user/appdata/cs2/web` too.
 
 ## 2. Configure
 
@@ -52,6 +52,8 @@ CLI equivalent: `cd /mnt/user/appdata/cs2/src && docker compose up -d --build`.
 * Router: forward **UDP 27015** (and TCP 27015 is not needed from outside - RCON stays on the LAN) to the Unraid IP.
 * The web panel needs no port forward: the Cloudflare Tunnel connects outwards. In Cloudflare Zero Trust ->
   Networks -> Tunnels, give the tunnel a public hostname `cs2.zandank.com` with service `http://web:8080`.
+* Set `CONNECT_ADDRESS` in `.env` to your WAN IP (or a DNS-only, non-proxied hostname) plus `:27015`; the
+  Cloudflare hostname does not carry game traffic.
 * On the LAN the panel is also at `http://<unraid-ip>:${WEB_PORT}`.
 
 ## 5. Updates

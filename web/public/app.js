@@ -24,7 +24,7 @@
     sync();
   }
   // Coach fields follow the "coaches allowed" checkbox.
-  var coaches = document.querySelector('input[name=coaches]');
+  var coaches = document.querySelector('input[type=checkbox][name=coaches]');
   if (coaches) {
     var syncCoaches = function () {
       document.querySelectorAll('.coach-field').forEach(function (f) { f.classList.toggle('hidden', !coaches.checked); });
