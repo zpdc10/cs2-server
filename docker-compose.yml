@@ -44,7 +44,7 @@ services:
       STEAMAPPVALIDATE: ${STEAMAPPVALIDATE:-0}
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
-      - ${APPDATA:-/mnt/user/appdata/cs2}/cs2-data:/home/steam/cs2-dedicated
+      - ${CS2_DATA:-${APPDATA:-/mnt/user/appdata/cs2}/cs2-data}:/home/steam/cs2-dedicated
       - ${APPDATA:-/mnt/user/appdata/cs2}/demos:/home/steam/cs2-dedicated/game/csgo/MatchZy_demos
     ports:
       - "27015:27015/udp"   # game (port-forward on the router)
