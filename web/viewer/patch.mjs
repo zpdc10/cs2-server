@@ -37,6 +37,70 @@ patch('src/Player/PlayerApp.jsx', [
     + '        setIsError(true);\n        setLoadingMessage(["This demo could not be read by the 2D viewer.", e.data.slice(12)]);\n      } else {'],
 ]);
 
+// Demos stored on this server are parsed on the server (bin/replay, see src/replays.js). The player fetches
+// /viewer/replay (gzip protobuf frames; 202 while the server prepares it) instead of downloading the .dem.
+// The WebAssembly parser is only loaded for a visitor's own file.
+patch('src/Player/PlayerApp.jsx', [
+  ['  useEffect(() => {\n    console.log("isWasmLoaded", isWasmLoaded);',
+    `  const loadServerReplay = (demoUrl, attempt = 0) => {
+    fetch(\`/viewer/replay?url=\${encodeURIComponent(demoUrl)}\`)
+      .then(async (res) => {
+        if (!worker.current) return;
+        if (res.status === 202 && attempt < 600) {
+          const info = await res.json().catch(() => ({}));
+          setLoadingMessage(["Preparing this demo on the server...", "This only happens once per demo and takes up to a minute.", info.message || ""]);
+          setTimeout(() => loadServerReplay(demoUrl, attempt + 1), 3000);
+          return;
+        }
+        if (!res.ok) {
+          const info = await res.json().catch(() => ({}));
+          throw new Error(info.error || \`HTTP \${res.status}\`);
+        }
+        setLoadingMessage(["Downloading replay..."]);
+        const buf = await res.arrayBuffer();
+        if (!worker.current) return;
+        setLoadingMessage(["Loading match..."]);
+        worker.current.postMessage({ replay: buf }, [buf]);
+      })
+      .catch((error) => {
+        setIsError(true);
+        setLoadingMessage(["This demo could not be loaded.", error.message]);
+      });
+  };
+
+  useEffect(() => {
+    console.log("isWasmLoaded", isWasmLoaded);`],
+  ['      const demoUrl = location.query.demourl;\n      setIsDownloading(true);',
+    '      const demoUrl = location.query.demourl;\n      setLoadingMessage(["Loading replay..."]);\n      loadServerReplay(demoUrl);\n      return;\n      setIsDownloading(true);'],
+]);
+patch('src/Player/demo.worker.js', [
+  ['self.onmessage = ({ data: { filename, data } }) => {',
+    `// Frames from the server: [uint32 little-endian length][protobuf Message], repeated.
+function postReplay(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let off = 0;
+  while (off + 4 <= bytes.length) {
+    const len = view.getUint32(off, true);
+    off += 4;
+    if (off + len > bytes.length) break;
+    self.postMessage(decodeMessage(bytes.subarray(off, off + len)));
+    off += len;
+  }
+}
+
+self.onmessage = ({ data: msg }) => {
+  if (msg && msg.replay) {
+    postReplay(new Uint8Array(msg.replay));
+    return;
+  }
+  const { filename, data } = msg;`],
+  ['    globalThis.wasmParseDemo(filename, data, (payload) => {',
+    '    (wasmLoading ||= loadWasm()).then(() => globalThis.wasmParseDemo(filename, data, (payload) => {'],
+  ['      );\n    });\n  }\n};', '      );\n    }));\n  }\n};'],
+  ['async function loadWasm() {', 'let wasmLoading = null;\nasync function loadWasm() {'],
+  ['\nloadWasm();', '\n// The parser is loaded on first use (a visitor\'s own file); server replays never need it.\nself.postMessage("ready");'],
+]);
+
 fs.copyFileSync(new URL('./UploadPage.jsx', import.meta.url), 'src/UploadPage.jsx');
 
 // Self-hosted icon font and W3.CSS stand-ins instead of fonts.googleapis.com and w3schools.com.

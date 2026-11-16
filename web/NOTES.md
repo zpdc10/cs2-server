@@ -37,6 +37,7 @@ writable by uid 1000.
 | `INTERNAL_URL` | `http://web:8080` | Base URL the game server uses to fetch match configs. |
 | `MAP_POOL` | `de_ancient,de_anubis,de_cache,de_dust2,de_inferno,de_mirage,de_nuke` | Veto pool and map picker. Matches server/NOTES.md. |
 | `DATA_DIR` / `DEMOS_DIR` | `/data/web` / `/data/demos` | |
+| `REPLAY_DIR` / `REPLAY_BIN` / `REPLAY_THREADS` | `DATA_DIR/replays` / `/app/bin/replay` / `4` | Server-side 2D replay cache, parser binary, and CPU threads per parse. |
 | `PORT` / `HOST` | `8080` / `0.0.0.0` | |
 | `TRUST_PROXY` | auto (`1` if https) | Use `CF-Connecting-IP` / `X-Forwarded-For` for the client IP in the access log. |
 | `SESSION_MAX_AGE_HOURS` | `168` | |
@@ -52,7 +53,7 @@ Public (no login):
 | `GET /demos` | Every demo in `DEMOS_DIR` (top level + one subfolder; `.dem`, `.dem.zip`, `.zip`, `.bz2`, `.gz`) with date, map, teams and final score. |
 | `GET\|HEAD /demos/file/<path>` | Download. Streams the file with `Content-Length`, single `Range` → 206, 416, `If-Range`, ETag / 304, and `Content-Disposition: attachment`. Path traversal is blocked: no `..`, `.`, dot-files, backslashes, NUL bytes or absolute paths; only demo extensions; the resolved path must stay inside the root; and `realpath` blocks symlink escapes. |
 | `GET /viewer/player?demourl=/demos/file/<path>` | 2D replay viewer (see below). The demos table shows a **Watch 2D** button for `.dem`, `.dem.gz`/`.gz` and `.dem.bz2`/`.bz2` files. `GET /viewer/` lets a visitor open a demo file from their own computer (it is parsed in their browser, nothing is uploaded). |
-| `GET /viewer/download?url=<demourl>` | Feeds a demo to the viewer. Only our own `/demos/file/...` URLs (relative or on `PUBLIC_URL`'s origin) are accepted, so it is not an open proxy; same path checks as the download route, plus an `X-Demo-Length` header for the progress bar. |
+| `GET /viewer/replay?url=<demourl>` | The server-parsed replay of one of our demos: `200` gzip frames (`Content-Encoding: gzip`, ETag), `202 {status:"processing"}` while it is queued/parsing (the player polls every 3 s), `409` while the demo is still being recorded, `422 {error}` if the demo can't be read, `404` otherwise. Only our own `/demos/file/...` URLs are accepted (same path checks as the download route). |
 | `GET /login` | Redirects to Steam OpenID 2.0. A random `state` goes in a cookie and in `return_to`, which blocks login CSRF. |
 | `GET /auth/steam/callback` | Checks `state`, then verifies the assertion (see below) and sets the session cookie. |
 | `POST /logout` | Needs CSRF. |
@@ -157,23 +158,39 @@ expiry and a per-login nonce. The CSRF token is `HMAC(secret, steamid:nonce)`.
 ## 2D replay viewer
 
 The viewer is [sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer) (MIT), the code behind 2d.sparko.cz.
-Its parser is Go ([demoinfocs-golang](https://github.com/markus-wa/demoinfocs-golang), MIT) compiled to WebAssembly, so the
-demo is downloaded once and parsed **in the visitor's browser**; the server only streams the file. The player is Preact.
+Its parser is Go ([demoinfocs-golang](https://github.com/markus-wa/demoinfocs-golang), MIT); the player is Preact.
+
+**Demos on this server are parsed on the server, once.** The same parser is built as a native command (`bin/replay`, source
+`viewer/replaycli/main.go`) that writes the player's protobuf messages as gzip frames `[uint32 LE length][Message]`.
+`src/replays.js` keeps the cache in `REPLAY_DIR` (default `DATA_DIR/replays`, i.e. `${APPDATA}/web/replays`, persistent):
+
+* At startup and every minute it scans `DEMOS_DIR` and queues every viewer-readable demo without a replay (this backfills
+  existing demos and picks up new ones after each match). Files modified in the last 2 minutes are skipped, so a demo still
+  being recorded is not parsed half-way. One demo is parsed at a time with `GOMAXPROCS=REPLAY_THREADS` (default 4), 20 min timeout.
+* Cache files are `<key>.rpl` (replay) and `<key>.err` (why it failed), `key = sha256(path, size, mtime)`, so a changed demo
+  is parsed again and files of deleted demos are removed by the next scan.
+* Watch 2D asks `/viewer/replay`; a demo nobody has opened yet jumps to the front of the queue.
+* Measured on the owner's scrim demos (sandbox, 4 cores): 153-365 MB demos take 10-42 s and become 2-6 MB replays.
+
+Only "Watch your own demo in 2D" (`/viewer/`) still uses the WebAssembly build, in the visitor's browser; it is loaded only then.
+If `bin/replay` is missing, the Watch 2D buttons are hidden (the own-demo page still works).
 
 How it gets into the image (`Dockerfile`, stages `viewer-src` and `viewer`):
 
 1. Clone upstream at the pinned commit `VIEWER_REF`, bump its demo parser to `DEMOINFOCS_VERSION` (default `v6.0.0-rc.2`:
    upstream's rc.1 fails on current CS2 demos with `ErrDecodeFailed ... insufficient buffer`), make `wasm.go` post
    `parse-error:<reason>` to the page when parsing fails, and build it with `GOOS=js GOARCH=wasm`, plus Go's `wasm_exec.js`.
+   Also build `viewer/replaycli/main.go` (copied in as `cmd/replay`) natively, static, to `/app/bin/replay` (`REPLAY_BIN`).
 2. `npm ci --ignore-scripts` in upstream `web/`, add `@fontsource/material-icons`, run `viewer/patch.mjs`, then
-   `vite build --base /viewer/` with `VITE_DOWNLOAD_SERVER_URL=/viewer` (the player then asks `/viewer/download?url=`).
+   `vite build --base /viewer/`.
 3. Copy `dist/` (with `wasm/` and upstream's `LICENSE.txt`) to `/app/viewer-dist`. `VIEWER_DIR` overrides the path. If
    `index.html` is missing there, the viewer routes return 404 and the Watch 2D buttons are hidden.
 
 `viewer/patch.mjs` moves the app's routes under `/viewer/`, replaces the upstream home page (Faceit/extension links, hosted
 match list) with `viewer/UploadPage.jsx` (the upload box, a note that the file stays in the browser, and a link back to
-/demos; the Demos page links to it as "Watch your own demo in 2D"), shows parse errors instead of an endless
-"Loading match...", and removes the two third-party stylesheets (Google Fonts icons, w3schools W3.CSS)
+/demos; the Demos page links to it as "Watch your own demo in 2D"), makes the player fetch `/viewer/replay` for our demos
+(with a "Preparing this demo on the server..." message while it waits) and the worker load the WebAssembly parser only for
+a local file, shows parse errors instead of an endless "Loading match...", and removes the two third-party stylesheets (Google Fonts icons, w3schools W3.CSS)
 in favour of the self-hosted icon font and `viewer/compat.css` (stand-ins for the few W3.CSS classes the player uses). Each
 replacement must match exactly once, so if upstream changes, the image build fails instead of shipping a broken viewer.
 
@@ -184,7 +201,7 @@ To update: set `VIEWER_REF` to a newer upstream commit, rebuild the image, and o
 Tested 2026-11-16 at `df5a8be` + demoinfocs rc.2 in Chromium with five CS2 demos (58-365 MB, including four real
 scrim demos from the owner): each loads and plays, and opening a local file from `/viewer/` works. No console or CSP errors.
 
-Limits: the whole demo is held in the browser's memory (fine for normal match demos; very old phones may struggle).
+Limits: for "watch your own demo" the whole file is held in the browser's memory (fine for normal match demos).
 `.zip` demos are not supported by the viewer and only get a Download button.
 
 ## Dependencies (owner rule: OSI open source + maintained; checked 2026-11-16)
@@ -192,7 +209,7 @@ Limits: the whole demo is held in the browser's memory (fine for normal match de
 | Dependency | Version | License | Last release | Repo |
 |---|---|---|---|---|
 | npm packages (runtime server) | **none** | n/a | n/a | n/a |
-| 2D viewer: sparkoo/csgo-2d-demo-viewer (built into the image, runs in the visitor's browser) | commit `df5a8be` (2026-10-30) | MIT | no tagged releases; commits weekly, last 2026-10-30 | https://github.com/sparkoo/csgo-2d-demo-viewer |
+| 2D viewer: sparkoo/csgo-2d-demo-viewer (built into the image: native parser on the server, player in the browser) | commit `df5a8be` (2026-10-30) | MIT | no tagged releases; commits weekly, last 2026-10-30 | https://github.com/sparkoo/csgo-2d-demo-viewer |
 | 2D viewer: demoinfocs-golang (CS2 demo parser, compiled to WebAssembly) | v6.0.0-rc.2 (`DEMOINFOCS_VERSION`; upstream pins rc.1) | MIT | rc.2 in 2026-11 | https://github.com/markus-wa/demoinfocs-golang |
 | 2D viewer: front-end packages from upstream's lockfile | preact 10.25, primereact 10.8.5, preact-iso 2.8.1, axios 1.21.0, google-protobuf 3.21.4, web-vitals 3.5.2; build only: vite 8.3.5, dotenv 16.4.5 | MIT; google-protobuf BSD-3-Clause + Apache-2.0; web-vitals Apache-2.0; dotenv BSD-2-Clause | every project released in Aug-Nov 2026 (newer majors exist; upstream pins these) | see upstream `web/package.json` |
 | 2D viewer: `@fontsource/material-icons` (replaces Google Fonts CDN) | 5.3.0 | OFL-1.1 (font Apache-2.0) | 2026-07 | https://github.com/fontsource/font-files |

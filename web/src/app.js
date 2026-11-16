@@ -14,6 +14,7 @@ import {
 import {
   VIEWER_CSP, viewerAvailable, demoPathFromViewerUrl, resolveViewerFile, sendViewerFile,
 } from './viewer.js';
+import { ReplayCache, sendReplay } from './replays.js';
 import {
   buildMatchConfig, quickScrimCommands, quickScrimNote, isValidMapName,
 } from './matchconfig.js';
@@ -107,6 +108,12 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   let panelMode = null;
   const viewerEnabled = viewerAvailable(config.viewerDir);
   if (!viewerEnabled) log.log?.(`[web] 2D viewer not found in ${config.viewerDir}; Watch 2D links are hidden`);
+  // Demos on the server are parsed here once (see replays.js); the browser only parses a visitor's own file.
+  const replays = new ReplayCache({
+    demosDir: config.demosDir, cacheDir: config.replayDir, bin: config.replayBin, threads: config.replayThreads, log,
+  });
+  const serverReplays = viewerEnabled && replays.enabled;
+  if (viewerEnabled && !serverReplays) log.log?.(`[web] replay parser not found at ${config.replayBin}; Watch 2D links are hidden`);
 
   // ---- cached server status -------------------------------------------------
   let statusCache = { at: 0, value: null, pending: null };
@@ -300,11 +307,26 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       if (!viewerEnabled) throw new HttpError(404, 'The 2D viewer is not installed in this build');
       if (p === '/viewer') return redirect(res, '/viewer/', 301);
       res.setHeader('Content-Security-Policy', VIEWER_CSP);
-      if (p === '/viewer/download') {
+      if (p === '/viewer/replay') {
+        // Parsed replay of a demo on this server: 200 (gzip frames), 202 while it is being prepared, 422 if unreadable.
+        if (!serverReplays) return json(res, 404, { error: 'Server-side replays are not available in this build' });
         const rel = demoPathFromViewerUrl(url.searchParams.get('url'), config.publicOrigin);
         const abs = rel && resolveDemoPath(config.demosDir, rel);
-        if (!abs || !(await isInsideRealRoot(config.demosDir, abs))) throw new HttpError(404, 'Not found');
-        return sendFile(req, res, abs, { extraHeaders: (st) => ({ 'X-Demo-Length': String(st.size) }) });
+        if (!abs || !(await isInsideRealRoot(config.demosDir, abs))) return json(res, 404, { error: 'No such demo' });
+        const job = await replays.jobFor(rel, abs, { requireStable: false });
+        if (!job) return json(res, 404, { error: 'No such demo' });
+        const s = await replays.status(job.key);
+        if (s.state === 'ready') return sendReplay(req, res, s.file);
+        if (s.state === 'failed') return json(res, 422, { error: s.error });
+        if (!(await replays.jobFor(rel, abs))) {
+          return json(res, 409, { error: 'This demo is still being recorded. Try again a few minutes after the match ends.' });
+        }
+        replays.enqueue(job, true);
+        const after = await replays.status(job.key);
+        return json(res, 202, {
+          status: 'processing',
+          message: after.position ? `Waiting for ${after.position - 1} other demo${after.position === 2 ? '' : 's'} first.` : 'Reading the demo now.',
+        }, { 'Cache-Control': 'no-store' });
       }
       const file = resolveViewerFile(config.viewerDir, p);
       if (!file || !(await sendViewerFile(req, res, file))) throw new HttpError(404, 'Not found');
@@ -359,7 +381,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       const rows = buildDemoRows(store, await listDemoFiles(config.demosDir));
       return page(res, {
         title: 'Demos', session, active: 'demos',
-        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${viewerEnabled ? '<a class="btn small" href="/viewer/" title="Opens in your browser; the file is not uploaded">Watch your own demo in 2D</a> ' : ''}${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows, { viewer: viewerEnabled })}</section>`,
+        body: `<section class="card"><div class="card-head"><h2>Demos</h2><span class="muted small">${viewerEnabled ? '<a class="btn small" href="/viewer/" title="Opens in your browser; the file is not uploaded">Watch your own demo in 2D</a> ' : ''}${rows.length} file${rows.length === 1 ? '' : 's'}</span></div>${demosTable(rows, { viewer: serverReplays })}</section>`,
       });
     }
 
@@ -375,7 +397,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       return page(res, {
         title: 'Server', session, active: 'home',
         body: `${statusCard(status, connect)}
-<section class="card"><div class="card-head"><h2>Latest demos</h2><a href="/demos" class="small">All demos →</a></div>${demosTable(rows, { compact: true, viewer: viewerEnabled })}</section>`,
+<section class="card"><div class="card-head"><h2>Latest demos</h2><a href="/demos" class="small">All demos →</a></div>${demosTable(rows, { compact: true, viewer: serverReplays })}</section>`,
       });
     }
 
@@ -499,7 +521,7 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
     throw new HttpError(404, 'Not found');
   }
 
-  return async function handler(req, res) {
+  const handler = async function handler(req, res) {
     try {
       await handle(req, res);
     } catch (e) {
@@ -514,6 +536,8 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       }
     }
   };
+  handler.replays = replays;
+  return handler;
 }
 
 export { HttpError };

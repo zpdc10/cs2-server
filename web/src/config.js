@@ -70,6 +70,10 @@ export function loadConfig(env = process.env) {
     demosDir: env.DEMOS_DIR || '/data/demos',
     // Built 2D viewer bundle (Dockerfile stage `viewer`). If index.html is missing there, the viewer is off.
     viewerDir: env.VIEWER_DIR || fileURLToPath(new URL('../viewer-dist', import.meta.url)),
+    // Server-side demo parser for the 2D viewer (Dockerfile stage `viewer-src`) and its persistent cache.
+    replayBin: env.REPLAY_BIN || fileURLToPath(new URL('../bin/replay', import.meta.url)),
+    replayDir: env.REPLAY_DIR || `${(env.DATA_DIR || '/data/web').replace(/\/+$/, '')}/replays`,
+    replayThreads: int(env.REPLAY_THREADS, 4),
     mapPool: list(env.MAP_POOL, DEFAULT_MAP_POOL),
   };
 }

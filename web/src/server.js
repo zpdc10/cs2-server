@@ -12,6 +12,8 @@ if (!config.rconPassword) console.warn('[web] RCON_PASSWORD not set - controls w
 
 const store = openDb(config.dataDir);
 const handler = createApp({ config, store });
+// Parse new demos for the 2D viewer in the background (startup backfill, then every minute).
+handler.replays.start();
 
 function clientIp(req) {
   if (config.trustProxy) {
