@@ -5,7 +5,7 @@ Self-hosted Counter-Strike 2 server for Unraid with practice and scrim/match mod
 | Part | Folder | What it does |
 |---|---|---|
 | Game server | `server/` | CS2 (joedwards32/cs2 image) + Metamod:Source + CounterStrikeSharp + MatchZy. Practice (`.prac`), scrims with knife round, ready-up, pauses, coaches, round restore, all 24 rounds played out, every match recorded. |
-| Deathmatch plugin | `plugins/DeathmatchMode/` | Admin `.dm` (free for all) / `.dm team`, switchable live like `.prac` / `.match`; also on the web Control page. |
+| Deathmatch plugin | `plugins/DeathmatchMode/` | Admin `.dm` (free for all) / `.dm team` deathmatch and `.gg` gun game, switchable live like `.prac` / `.match`; also on the web Control page. |
 | Admin plugin | `plugins/SteamGroupAdmins/` | Gives `@css/root` to members of a public Steam group (refreshes every 5 min). |
 | Web panel | `web/` | Steam login for group members to switch modes, start scrims, pause and restore rounds. Public status, demo downloads and a 2D replay viewer in the browser. |
 | Tunnel | `docker-compose.yml` | `cloudflared` publishes the panel at `PUBLIC_URL` without opening a web port. |
