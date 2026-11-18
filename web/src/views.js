@@ -160,6 +160,12 @@ export function adminPage({ csrf, flash, live, mapPool, backups, audit, currentM
   </div>
 </section>
 
+<section class="card">
+  <h2>Server</h2>
+  <p class="muted small">Restarts the CS2 server. It checks Steam for CS2 updates and installs them before starting, so it can be offline for a few minutes. Everyone is disconnected and a running match stops.</p>
+  <div class="actions">${act('restart', 'Restart server (and update CS2)', 'danger', 'Restart the CS2 server now? Everyone is disconnected and a running match stops. It checks for CS2 updates on start, which can take a few minutes.')}</div>
+</section>
+
 <div class="grid2">
 <section class="card">
   <h2>Practice</h2>

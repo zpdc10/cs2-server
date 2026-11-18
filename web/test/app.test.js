@@ -200,6 +200,7 @@ function fakeDmRcon({ matchRunning = false } = {}) {
           sock.write(encodePacket(p.id, SERVERDATA_AUTH_RESPONSE, ''));
         } else if (p.type === SERVERDATA_EXECCOMMAND) {
           state.commands.push(p.body);
+          if (p.body === 'quit') { sock.destroy(); return; } // CS2 drops RCON while shutting down
           let out = '';
           const m = /^css_dm (ffa|team|gg)$/.exec(p.body);
           if (m) {
@@ -217,7 +218,7 @@ function fakeDmRcon({ matchRunning = false } = {}) {
   return new Promise((resolve) => srv.listen(0, '127.0.0.1', () => resolve({ srv, state })));
 }
 
-async function dmAction(action, { matchRunning = false } = {}) {
+async function dmAction(action, { matchRunning = false, rconDown = false, times = 1 } = {}) {
   const rconSrv = await fakeDmRcon({ matchRunning });
   const secret = 'x'.repeat(32);
   const config = loadConfig({
@@ -227,6 +228,8 @@ async function dmAction(action, { matchRunning = false } = {}) {
     RCON_HOST: '127.0.0.1', RCON_PORT: String(rconSrv.srv.address().port), RCON_PASSWORD: 'pw',
   });
   config.dmCheckDelayMs = 10;
+  config.restartWarnMs = 10;
+  if (rconDown) await new Promise((r) => rconSrv.srv.close(r));
   const quiet = { warn() {}, error() {}, log() {} };
   const srv = http.createServer(createApp({ config, store: openDb(':memory:'), log: quiet }));
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -235,15 +238,17 @@ async function dmAction(action, { matchRunning = false } = {}) {
     const session = { sid: '76561197960290419', name: 'n', exp: Math.floor(Date.now() / 1000) + 600, n: 'abc' };
     const csrf = new Sessions({ secret }).csrfToken(session);
     const cookie = `cs2panel=${encodeURIComponent(encodeSession(secret, session))}`;
-    const r = await fetch(`${base}/admin/action`, {
-      method: 'POST', redirect: 'manual',
-      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `action=${action}&csrf=${encodeURIComponent(csrf)}`,
-    });
-    assert.equal(r.status, 303);
+    for (let i = 0; i < times; i++) {
+      const r = await fetch(`${base}/admin/action`, {
+        method: 'POST', redirect: 'manual',
+        headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=${action}&csrf=${encodeURIComponent(csrf)}`,
+      });
+      assert.equal(r.status, 303);
+    }
     const html = await (await fetch(`${base}/admin`, { headers: { Cookie: cookie } })).text();
     return { html, state: rconSrv.state };
-  } finally { srv.close(); rconSrv.srv.close(); }
+  } finally { srv.close(); if (!rconDown) rconSrv.srv.close(); }
 }
 
 test('HTTP: deathmatch buttons start deathmatch over RCON and report the result', async () => {
@@ -264,4 +269,20 @@ test('HTTP: deathmatch buttons start deathmatch over RCON and report the result'
   ({ html, state } = await dmAction('deathmatch', { matchRunning: true }));
   assert.equal(state.on, false);
   assert.match(html, /did not start/);
+});
+
+test('HTTP: restart button warns players, quits the server and refuses a second click', async () => {
+  let { html, state } = await dmAction('restart');
+  assert.match(html, /Restart server \(and update CS2\)/); // the button
+  assert.match(state.commands[0], /^css_asay Server restarting/);
+  assert.equal(state.commands[1], 'quit');
+  assert.equal(state.commands.filter((c) => c === 'quit').length, 1);
+  assert.match(html, /checks Steam for CS2 updates/);
+
+  ({ html, state } = await dmAction('restart', { times: 2 }));
+  assert.equal(state.commands.filter((c) => c === 'quit').length, 1);
+  assert.match(html, /less than 2 minutes ago/);
+
+  ({ html } = await dmAction('restart', { rconDown: true }));
+  assert.match(html, /was not restarted/);
 });

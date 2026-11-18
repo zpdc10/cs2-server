@@ -115,6 +115,10 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
   // MatchZy reports no "practice" state (gamestate is none/warmup), so remember what the panel last set.
   let panelMode = null;
   const dmCheckDelayMs = config.dmCheckDelayMs ?? 2500;
+  // Restart: warn players, then `quit`. Docker (restart: unless-stopped) starts the container again, and its
+  // entry.sh runs steamcmd app_update 730 before launching CS2, so every restart installs pending CS2 updates.
+  const restartWarnMs = config.restartWarnMs ?? 5000;
+  let restartLockUntil = 0;
   const viewerEnabled = viewerAvailable(config.viewerDir);
   if (!viewerEnabled) log.log?.(`[web] 2D viewer not found in ${config.viewerDir}; Watch 2D links are hidden`);
   // Demos on the server are parsed here once (see replays.js); the browser only parses a visitor's own file.
@@ -266,9 +270,31 @@ export function createApp({ config, store, log = console, fetchImpl = fetch }) {
       }
       case 'scrim':
         return startScrim(form, user, exec, out);
+      case 'restart':
+        return restartServer(out);
       default:
         return out('Unknown action', '', false);
     }
+  }
+
+  async function restartServer(out) {
+    const title = 'Restart server';
+    if (Date.now() < restartLockUntil) {
+      return out(title, '', false, 'A restart was started less than 2 minutes ago. Wait for the server to come back online.');
+    }
+    try {
+      await rcon.exec([`css_asay Server restarting in ${Math.round(restartWarnMs / 1000)} seconds to check for CS2 updates. Reconnect in a few minutes.`]);
+    } catch (e) {
+      return out(title, '', false, `The server did not answer over RCON (${e.message}), so it was not restarted. If it is stuck, restart the cs2 container on Unraid.`);
+    }
+    restartLockUntil = Date.now() + 120000;
+    await new Promise((r) => setTimeout(r, restartWarnMs));
+    // The server drops the RCON connection while quitting, so an error here is expected.
+    await rcon.exec(['quit'], { timeoutMs: 3000 }).catch(() => {});
+    panelMode = null;
+    statusCache = { at: 0, value: null, pending: null };
+    return out(title, '> quit', true,
+      'The CS2 server is shutting down and starts again by itself. On start it checks Steam for CS2 updates and installs them first, so it can take a few minutes (longer after a big update). The status on the Server page turns green when it is back.');
   }
 
   async function startScrim(form, user, exec, out) {

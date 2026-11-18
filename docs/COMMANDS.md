@@ -1,7 +1,7 @@
 # In-game chat commands
 
 Type these in chat. **Admin** = member of the Steam group (gets `@css/root`). **Everyone** = any player.
-None of them restart the server.
+None of them restart the server. To restart it (and install CS2 updates), use **Restart server** on the web Control page (admins only).
 
 ## Switching modes and maps (admin)
 | Command | What it does | Notes |
