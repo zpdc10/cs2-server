@@ -91,6 +91,7 @@ All of these were checked against the MatchZy 0.9.3 source (`ConsoleCommands.cs`
 | Restore backup | `matchzy_loadbackup matchzy_<id>_<map>_roundNN.json` (works for any match/map, unlike `css_restore N`, which only covers the live map). MatchZy pauses after a restore, so press Unpause. |
 | Start scrim (with rosters) | Saves the config, then sends `matchzy_loadmatch_url "http://web:8080/api/matchconfig/<id>.json" "X-Config-Token" "<token>"` |
 | Start scrim (no rosters, "quick") | `css_map <map>`, then about 15 s later (after MatchZy's autostart runs on the new map) `css_exitprac`, `matchzy_playout_enabled_default false`, `matchzy_knife_enabled_default <bool>`, `css_team1 <name>`, `css_team2 <name>`. If the server is already on that map, these are sent right away. |
+| Restart server (and update CS2) | `css_asay` warning, 5 s later `quit`. The cs2 container exits and Docker (`restart: unless-stopped`) starts it again; the base image's `entry.sh` runs `steamcmd +app_update 730` on every start, so pending CS2 updates are installed before the server launches (and `pre.sh` re-patches Metamod afterwards). A second click within 2 minutes is refused. If RCON does not answer, nothing happens: restart the container on Unraid instead. |
 
 ### Generated match JSON (Get5 schema as read by MatchZy `LoadMatchFromJSON` / `ValidateMatchJsonStructure`)
 
